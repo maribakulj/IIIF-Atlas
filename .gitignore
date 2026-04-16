@@ -1,0 +1,16 @@
+node_modules
+dist
+.dist
+build
+.wrangler
+.mf
+.miniflare
+coverage
+.env
+.env.local
+.env.*.local
+.DS_Store
+*.log
+.vscode
+.idea
+apps/extension/dist-zip

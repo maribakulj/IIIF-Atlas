@@ -1,0 +1,26 @@
+{
+  "name": "iiif-atlas",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Visual Zotero for IIIF — capture, manage, and publish IIIF Presentation 3 manifests from the web.",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r --filter ./packages/** run build && pnpm -r --filter ./apps/** run build",
+    "dev:api": "pnpm --filter @iiif-atlas/api dev",
+    "dev:web": "pnpm --filter @iiif-atlas/web dev",
+    "dev:extension": "pnpm --filter @iiif-atlas/extension dev",
+    "build:shared": "pnpm --filter @iiif-atlas/shared build",
+    "deploy:api": "pnpm --filter @iiif-atlas/api deploy",
+    "deploy:web": "pnpm --filter @iiif-atlas/web deploy",
+    "migrate:local": "pnpm --filter @iiif-atlas/api migrate:local",
+    "migrate:remote": "pnpm --filter @iiif-atlas/api migrate:remote",
+    "typecheck": "pnpm -r run typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  },
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20"
+  }
+}

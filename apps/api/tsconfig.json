@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["@cloudflare/workers-types"],
+    "moduleResolution": "Bundler",
+    "module": "ESNext",
+    "lib": ["ES2022"],
+    "noEmit": true,
+    "paths": {
+      "@iiif-atlas/shared": ["../../packages/shared/src/index.ts"],
+      "@iiif-atlas/shared/*": ["../../packages/shared/src/*"]
+    }
+  },
+  "include": ["src", "../../packages/shared/src"]
+}
