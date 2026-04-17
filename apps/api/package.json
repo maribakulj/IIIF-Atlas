@@ -1,0 +1,27 @@
+{
+  "name": "@iiif-atlas/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "build": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "deploy": "wrangler deploy",
+    "migrate:local": "wrangler d1 migrations apply iiif_atlas --local",
+    "migrate:remote": "wrangler d1 migrations apply iiif_atlas --remote"
+  },
+  "dependencies": {
+    "@iiif-atlas/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.5.30",
+    "@cloudflare/workers-types": "^4.20241022.0",
+    "typescript": "^5.6.3",
+    "vitest": "2.1.9",
+    "wrangler": "^3.80.0"
+  }
+}

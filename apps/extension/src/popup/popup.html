@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>IIIF Atlas</title>
+    <style>
+      body { width: 360px; margin: 0; font: 13px/1.45 system-ui, sans-serif; background: #0f1115; color: #e8ebf0; }
+      #root { padding: 12px 14px; }
+      h1 { font-size: 14px; margin: 0 0 8px; }
+      button { padding: 6px 10px; border-radius: 6px; border: 1px solid #2a2f3a; background: #4f8cff; color: white; cursor: pointer; }
+      button.ghost { background: transparent; color: #e8ebf0; }
+      button:disabled { opacity: .5; cursor: default; }
+      select, input { width: 100%; padding: 6px 8px; border: 1px solid #2a2f3a; background: #1e222b; color: #e8ebf0; border-radius: 6px; }
+      .row { display: flex; gap: 6px; margin-top: 8px; }
+      .muted { color: #8a93a2; }
+      .thumbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; max-height: 180px; overflow: auto; margin: 6px 0; }
+      .thumbs label { display: block; aspect-ratio: 1; border: 1px solid #2a2f3a; border-radius: 4px; overflow: hidden; cursor: pointer; position: relative; }
+      .thumbs label img { width: 100%; height: 100%; object-fit: cover; }
+      .thumbs label input { position: absolute; top: 2px; left: 2px; width: auto; }
+      .iiif-banner { background: rgba(198, 120, 221, .15); border: 1px solid rgba(198, 120, 221, .3); padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; }
+      .alert { padding: 6px 8px; border-radius: 6px; margin-top: 6px; }
+      .alert.error { background: rgba(255,107,107,.15); border: 1px solid rgba(255,107,107,.3); color: #ff6b6b; }
+      .alert.ok { background: rgba(73,179,124,.15); border: 1px solid rgba(73,179,124,.3); color: #49b37c; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./popup.tsx"></script>
+  </body>
+</html>

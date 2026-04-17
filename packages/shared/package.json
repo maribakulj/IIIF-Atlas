@@ -1,0 +1,26 @@
+{
+  "name": "@iiif-atlas/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts",
+    "./iiif": "./src/iiif.ts",
+    "./detect": "./src/detect.ts",
+    "./api": "./src/api.ts"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "happy-dom": "^15.7.4",
+    "typescript": "^5.6.3",
+    "vitest": "2.1.9"
+  }
+}
