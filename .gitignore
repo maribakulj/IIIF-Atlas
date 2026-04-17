@@ -11,6 +11,9 @@ coverage
 .env.*.local
 .DS_Store
 *.log
+*.tsbuildinfo
 .vscode
 .idea
 apps/extension/dist-zip
+manifest.json
+!apps/extension/manifest.json

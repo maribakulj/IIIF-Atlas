@@ -1,10 +1,4 @@
-import type {
-  CapturePayload,
-  Item,
-  Collection,
-  ItemPatch,
-  CollectionCreate,
-} from "./types.js";
+import type { CapturePayload, Collection, CollectionCreate, Item, ItemPatch } from "./types.js";
 
 /** Response envelopes for the REST API. */
 

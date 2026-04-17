@@ -3,7 +3,7 @@
  * Spec: https://iiif.io/api/presentation/3.0/
  */
 
-import type { Item, Collection } from "./types.js";
+import type { Collection, Item } from "./types.js";
 
 export interface IIIFLabel {
   [lang: string]: string[];
@@ -23,7 +23,13 @@ export interface IIIFManifest {
   metadata?: IIIFMetadataEntry[];
   requiredStatement?: IIIFMetadataEntry;
   homepage?: Array<{ id: string; type: "Text"; label: IIIFLabel; format: string }>;
-  thumbnail?: Array<{ id: string; type: "Image"; format?: string; width?: number; height?: number }>;
+  thumbnail?: Array<{
+    id: string;
+    type: "Image";
+    format?: string;
+    width?: number;
+    height?: number;
+  }>;
   items: IIIFCanvas[];
 }
 
@@ -65,7 +71,12 @@ export interface IIIFCollection {
   type: "Collection";
   label: IIIFLabel;
   summary?: IIIFLabel;
-  items: Array<{ id: string; type: "Manifest" | "Collection"; label: IIIFLabel; thumbnail?: IIIFManifest["thumbnail"] }>;
+  items: Array<{
+    id: string;
+    type: "Manifest" | "Collection";
+    label: IIIFLabel;
+    thumbnail?: IIIFManifest["thumbnail"];
+  }>;
 }
 
 export const IIIF_CONTEXT = "http://iiif.io/api/presentation/3/context.json";
@@ -89,7 +100,15 @@ export interface BuildManifestParams {
  * Build a minimal Presentation 3 manifest for a single-image item.
  */
 export function buildItemManifest(params: BuildManifestParams): IIIFManifest {
-  const { item, publicBaseUrl, imageUrl, width, height, format = "image/jpeg", imageService } = params;
+  const {
+    item,
+    publicBaseUrl,
+    imageUrl,
+    width,
+    height,
+    format = "image/jpeg",
+    imageService,
+  } = params;
   const manifestId = `${publicBaseUrl}/iiif/manifests/${item.manifestSlug ?? item.slug}`;
   const canvasId = `${manifestId}/canvas/1`;
   const pageId = `${canvasId}/page/1`;
@@ -218,9 +237,7 @@ export function buildCollection(params: BuildCollectionParams): IIIFCollection {
           ? {
               thumbnail: [
                 {
-                  id: it.r2Key
-                    ? `${publicBaseUrl}/r2/${it.r2Key}`
-                    : (it.sourceImageUrl as string),
+                  id: it.r2Key ? `${publicBaseUrl}/r2/${it.r2Key}` : (it.sourceImageUrl as string),
                   type: "Image" as const,
                   ...(it.mimeType ? { format: it.mimeType } : {}),
                 },

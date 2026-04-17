@@ -28,8 +28,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     } catch {
       body = await res.text();
     }
-    const msg =
-      (body as { message?: string })?.message ?? `HTTP ${res.status}`;
+    const msg = (body as { message?: string })?.message ?? `HTTP ${res.status}`;
     throw new Error(msg);
   }
   if (res.status === 204) return undefined as T;

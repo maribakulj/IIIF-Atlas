@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Lint · Typecheck · Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (Biome)
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test (shared)
+        run: pnpm --filter @iiif-atlas/shared test
+
+      - name: Test (api, Workers pool)
+        run: pnpm --filter @iiif-atlas/api test
+
+      - name: Build shared package (verify dist)
+        run: pnpm build:shared
+
+      - name: Emit and smoke-check fixture manifest
+        run: |
+          node scripts/emit-fixture-manifest.mjs > manifest.json
+          node -e "const m=JSON.parse(require('node:fs').readFileSync('manifest.json','utf8'));if(m.type!=='Manifest'||!m['@context'].includes('presentation/3')||!Array.isArray(m.items)||m.items.length===0){console.error('Fixture manifest failed smoke check',m);process.exit(1)}"

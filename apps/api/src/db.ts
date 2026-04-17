@@ -1,4 +1,4 @@
-import type { Collection, Item, IngestionMode } from "@iiif-atlas/shared";
+import type { Collection, IngestionMode, Item } from "@iiif-atlas/shared";
 
 /** D1 row shapes. */
 export interface ItemRow {
@@ -51,9 +51,7 @@ export function mapItem(row: ItemRow, publicBaseUrl: string): Item {
     height: row.height,
     byteSize: row.byte_size,
     manifestSlug: row.manifest_slug,
-    manifestUrl: row.manifest_slug
-      ? `${publicBaseUrl}/iiif/manifests/${row.manifest_slug}`
-      : null,
+    manifestUrl: row.manifest_slug ? `${publicBaseUrl}/iiif/manifests/${row.manifest_slug}` : null,
     capturedAt: row.captured_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -61,11 +59,7 @@ export function mapItem(row: ItemRow, publicBaseUrl: string): Item {
   };
 }
 
-export function mapCollection(
-  row: CollectionRow,
-  itemCount = 0,
-  items?: Item[],
-): Collection {
+export function mapCollection(row: CollectionRow, itemCount = 0, items?: Item[]): Collection {
   return {
     id: row.id,
     slug: row.slug,

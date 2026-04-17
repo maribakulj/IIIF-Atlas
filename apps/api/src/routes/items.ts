@@ -4,10 +4,10 @@ import type {
   ItemResponse,
   ListItemsResponse,
 } from "@iiif-atlas/shared";
-import { badRequest, notFound } from "../errors.js";
-import type { Env } from "../env.js";
 import { mapItem } from "../db.js";
 import type { ItemRow } from "../db.js";
+import type { Env } from "../env.js";
+import { badRequest, notFound } from "../errors.js";
 import { buildManifestForItem } from "../iiif-builder.js";
 
 export async function listItems(req: Request, env: Env): Promise<Response> {
@@ -99,11 +99,10 @@ export async function patchItem(
     sets.push("mode = ?");
     binds.push(body.mode);
   }
+  if (sets.length === 0) throw badRequest("No fields to update");
   sets.push("updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')");
   // Invalidate cached manifest so it gets regenerated next time.
   sets.push("manifest_json = NULL");
-
-  if (sets.length === 1) throw badRequest("No fields to update");
 
   await env.DB.prepare(`UPDATE items SET ${sets.join(", ")} WHERE id = ?`)
     .bind(...binds, row.id)

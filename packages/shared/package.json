@@ -14,9 +14,13 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
-    "typescript": "^5.6.3"
+    "happy-dom": "^15.7.4",
+    "typescript": "^5.6.3",
+    "vitest": "2.1.9"
   }
 }

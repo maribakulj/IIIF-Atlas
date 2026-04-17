@@ -31,10 +31,18 @@ export class Router {
     return this;
   }
 
-  get(p: string, h: RouteHandler) { return this.add("GET", p, h); }
-  post(p: string, h: RouteHandler) { return this.add("POST", p, h); }
-  patch(p: string, h: RouteHandler) { return this.add("PATCH", p, h); }
-  del(p: string, h: RouteHandler) { return this.add("DELETE", p, h); }
+  get(p: string, h: RouteHandler) {
+    return this.add("GET", p, h);
+  }
+  post(p: string, h: RouteHandler) {
+    return this.add("POST", p, h);
+  }
+  patch(p: string, h: RouteHandler) {
+    return this.add("PATCH", p, h);
+  }
+  del(p: string, h: RouteHandler) {
+    return this.add("DELETE", p, h);
+  }
 
   async handle(req: Request, env: Env, ctx: ExecutionContext): Promise<Response | null> {
     const url = new URL(req.url);

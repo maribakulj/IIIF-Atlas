@@ -1,5 +1,5 @@
-import { assertOutboundUrl } from "./ssrf.js";
 import { badRequest, unprocessable } from "./errors.js";
+import { assertOutboundUrl } from "./ssrf.js";
 
 export interface SafeFetchOptions {
   timeoutMs: number;
@@ -50,10 +50,10 @@ export async function safeFetch(raw: string, opts: SafeFetchOptions): Promise<Sa
     assertOutboundUrl(finalUrl);
   }
 
-  const mime = (response.headers.get("content-type") ?? "application/octet-stream")
-    .split(";")[0]
-    .trim()
-    .toLowerCase();
+  const [mimeRaw = "application/octet-stream"] = (
+    response.headers.get("content-type") ?? "application/octet-stream"
+  ).split(";");
+  const mime = mimeRaw.trim().toLowerCase();
 
   if (opts.allowedMime && opts.allowedMime.length > 0) {
     if (!opts.allowedMime.includes(mime)) {

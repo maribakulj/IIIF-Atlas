@@ -1,26 +1,18 @@
-import type { Env } from "./env.js";
-import { Router } from "./router.js";
-import { HttpError, notFound } from "./errors.js";
 import { corsHeaders, handlePreflight } from "./cors.js";
+import type { Env } from "./env.js";
+import { HttpError, notFound } from "./errors.js";
+import { Router } from "./router.js";
 
+import { streamR2Object } from "./r2.js";
 import { createCapture } from "./routes/captures.js";
 import {
-  listItems,
-  getItem,
-  patchItem,
-  generateManifest,
-} from "./routes/items.js";
-import {
-  listCollections,
   createCollection,
   getCollection,
+  listCollections,
   updateCollection,
 } from "./routes/collections.js";
-import {
-  getManifestBySlug,
-  getCollectionBySlug,
-} from "./routes/iiif.js";
-import { streamR2Object } from "./r2.js";
+import { getCollectionBySlug, getManifestBySlug } from "./routes/iiif.js";
+import { generateManifest, getItem, listItems, patchItem } from "./routes/items.js";
 
 const router = new Router()
   .post("/api/captures", createCapture)

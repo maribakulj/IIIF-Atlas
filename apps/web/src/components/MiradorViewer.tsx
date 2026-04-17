@@ -14,8 +14,7 @@ export function MiradorViewer({ manifestUrl }: { manifestUrl: string }) {
     if (containerRef.current) containerRef.current.id = id;
 
     (async () => {
-      const mod = await import("mirador");
-      const mirador = (mod as unknown as { default: { viewer: (config: unknown) => unknown } }).default;
+      const { default: mirador } = await import("mirador");
       if (cancelled || !containerRef.current) return;
       viewerRef.current = mirador.viewer({
         id,
@@ -23,7 +22,7 @@ export function MiradorViewer({ manifestUrl }: { manifestUrl: string }) {
         window: { sideBarPanel: "info" },
         workspace: { type: "mosaic" },
         workspaceControlPanel: { enabled: false },
-      }) as { unmount?: () => void };
+      });
     })().catch((err) => {
       console.error("[Mirador] failed to load", err);
     });

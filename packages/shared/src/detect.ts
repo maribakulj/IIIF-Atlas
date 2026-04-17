@@ -5,10 +5,7 @@
 
 import type { DetectResult } from "./types.js";
 
-const IIIF_CONTEXT_PATTERNS = [
-  /iiif\.io\/api\/presentation\/\d/,
-  /iiif\.io\/api\/image\/\d/,
-];
+const IIIF_CONTEXT_PATTERNS = [/iiif\.io\/api\/presentation\/\d/, /iiif\.io\/api\/image\/\d/];
 
 /** Heuristic: does a URL look like a IIIF info.json endpoint? */
 export function looksLikeInfoJson(url: string): boolean {
@@ -50,7 +47,8 @@ export function detectFromDocument(doc: Document): DetectResult {
     if (
       rel.includes("iiif") ||
       type.includes("iiif") ||
-      looksLikeManifestUrl(href)
+      looksLikeManifestUrl(href) ||
+      looksLikeInfoJson(href)
     ) {
       if (looksLikeInfoJson(href)) result.infoJsonUrl ??= href;
       else result.manifestUrl ??= href;
@@ -79,11 +77,7 @@ export function detectFromDocument(doc: Document): DetectResult {
 
   // 3) og:image / twitter:image
   const meta = (name: string) =>
-    doc
-      .querySelector<HTMLMetaElement>(
-        `meta[property="${name}"], meta[name="${name}"]`,
-      )
-      ?.content;
+    doc.querySelector<HTMLMetaElement>(`meta[property="${name}"], meta[name="${name}"]`)?.content;
   const og = meta("og:image");
   const tw = meta("twitter:image");
   if (og) push(og);
@@ -114,9 +108,10 @@ export function detectFromDocument(doc: Document): DetectResult {
  * Best-effort classification of a fetched JSON document as a IIIF resource.
  * Used server-side when validating a manifestUrl / infoJsonUrl submission.
  */
-export function classifyIIIFJson(
-  json: unknown,
-): { kind: "manifest" | "collection" | "image-info" | "unknown"; version?: 2 | 3 } {
+export function classifyIIIFJson(json: unknown): {
+  kind: "manifest" | "collection" | "image-info" | "unknown";
+  version?: 2 | 3;
+} {
   if (!json || typeof json !== "object") return { kind: "unknown" };
   const obj = json as Record<string, unknown>;
   const ctx = obj["@context"];

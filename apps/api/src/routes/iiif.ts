@@ -1,9 +1,8 @@
-import { notFound } from "../errors.js";
-import type { Env } from "../env.js";
 import { mapCollection, mapItem } from "../db.js";
 import type { CollectionRow, ItemRow } from "../db.js";
+import type { Env } from "../env.js";
+import { notFound } from "../errors.js";
 import { buildCollectionManifest, buildManifestForItem } from "../iiif-builder.js";
-import { streamR2Object } from "../r2.js";
 
 const JSON_LD_HEADERS: HeadersInit = {
   "Content-Type": 'application/ld+json;profile="http://iiif.io/api/presentation/3/context.json"',
@@ -17,9 +16,7 @@ export async function getManifestBySlug(
   _ctx: ExecutionContext,
   params: Record<string, string>,
 ): Promise<Response> {
-  const row = await env.DB.prepare(
-    `SELECT * FROM items WHERE manifest_slug = ? OR slug = ?`,
-  )
+  const row = await env.DB.prepare(`SELECT * FROM items WHERE manifest_slug = ? OR slug = ?`)
     .bind(params.slug, params.slug)
     .first<ItemRow>();
   if (!row) throw notFound("Manifest not found");
@@ -69,21 +66,4 @@ export async function getCollectionBySlug(
   const mapped = (items.results ?? []).map((r) => mapItem(r, env.PUBLIC_BASE_URL));
   const manifest = buildCollectionManifest(env, mapCollection(row, mapped.length), mapped);
   return new Response(JSON.stringify(manifest), { status: 200, headers: JSON_LD_HEADERS });
-}
-
-export async function getR2Object(
-  _req: Request,
-  env: Env,
-  _ctx: ExecutionContext,
-  params: Record<string, string>,
-): Promise<Response> {
-  // The key is passed as a URL-wildcard; we reconstruct it from the wildcard captured by the router.
-  // Router registers the wildcard as a single segment, so we expose a path-style param.
-  const key = params.key;
-  if (!key) throw notFound();
-  const res = await streamR2Object(env, key);
-  if (res.status === 200) {
-    res.headers.set("Access-Control-Allow-Origin", "*");
-  }
-  return res;
 }

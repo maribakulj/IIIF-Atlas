@@ -1,7 +1,7 @@
+import type { Collection, Item } from "@iiif-atlas/shared";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client.js";
-import type { Collection, Item } from "@iiif-atlas/shared";
 import { ItemCard } from "../components/ItemCard.js";
 
 export function Dashboard() {
@@ -33,8 +33,8 @@ export function Dashboard() {
       <header className="page-header">
         <h1>Dashboard</h1>
         <p className="muted">
-          Capture images from the web with the browser extension, or add IIIF
-          resources directly from the library.
+          Capture images from the web with the browser extension, or add IIIF resources directly
+          from the library.
         </p>
       </header>
 
@@ -43,7 +43,9 @@ export function Dashboard() {
       <section className="card">
         <div className="row-between">
           <h2>Recent items</h2>
-          <Link to="/library" className="btn btn-ghost">View all ({total})</Link>
+          <Link to="/library" className="btn btn-ghost">
+            View all ({total})
+          </Link>
         </div>
         {loading ? (
           <p>Loading…</p>
@@ -51,7 +53,9 @@ export function Dashboard() {
           <p className="muted">No items yet. Install the extension and clip your first image.</p>
         ) : (
           <div className="grid">
-            {items.map((it) => <ItemCard key={it.id} item={it} />)}
+            {items.map((it) => (
+              <ItemCard key={it.id} item={it} />
+            ))}
           </div>
         )}
       </section>
@@ -59,7 +63,9 @@ export function Dashboard() {
       <section className="card">
         <div className="row-between">
           <h2>Collections</h2>
-          <Link to="/collections/new" className="btn">New collection</Link>
+          <Link to="/collections/new" className="btn">
+            New collection
+          </Link>
         </div>
         {collections.length === 0 ? (
           <p className="muted">No collections yet.</p>

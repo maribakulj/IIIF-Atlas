@@ -1,9 +1,9 @@
+import type { Item } from "@iiif-atlas/shared";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client.js";
-import type { Item } from "@iiif-atlas/shared";
-import { ModeBadge } from "../components/ModeBadge.js";
 import { MiradorViewer } from "../components/MiradorViewer.js";
+import { ModeBadge } from "../components/ModeBadge.js";
 
 export function ItemPage() {
   const { id } = useParams<{ id: string }>();
@@ -108,7 +108,9 @@ export function ItemPage() {
                 <a href={item.sourcePageUrl} target="_blank" rel="noreferrer">
                   {item.sourcePageUrl}
                 </a>
-              ) : "—"}
+              ) : (
+                "—"
+              )}
             </dd>
             <dt>Source image</dt>
             <dd>
@@ -116,7 +118,9 @@ export function ItemPage() {
                 <a href={item.sourceImageUrl} target="_blank" rel="noreferrer">
                   {item.sourceImageUrl}
                 </a>
-              ) : "—"}
+              ) : (
+                "—"
+              )}
             </dd>
             <dt>Source manifest</dt>
             <dd>
@@ -124,7 +128,9 @@ export function ItemPage() {
                 <a href={item.sourceManifestUrl} target="_blank" rel="noreferrer">
                   {item.sourceManifestUrl}
                 </a>
-              ) : "—"}
+              ) : (
+                "—"
+              )}
             </dd>
             <dt>Public manifest</dt>
             <dd>
@@ -132,7 +138,9 @@ export function ItemPage() {
                 <a href={item.manifestUrl} target="_blank" rel="noreferrer">
                   {item.manifestUrl}
                 </a>
-              ) : "—"}
+              ) : (
+                "—"
+              )}
             </dd>
           </dl>
         </div>

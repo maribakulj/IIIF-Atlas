@@ -1,7 +1,7 @@
+import type { Collection, Item } from "@iiif-atlas/shared";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client.js";
-import type { Collection, Item } from "@iiif-atlas/shared";
 import { API_BASE_URL } from "../lib/config.js";
 
 export function CollectionEditor() {
@@ -21,10 +21,7 @@ export function CollectionEditor() {
   useEffect(() => {
     let active = true;
     setLoading(true);
-    Promise.all([
-      id ? api.getCollection(id) : Promise.resolve(null),
-      api.listItems({ limit: 200 }),
-    ])
+    Promise.all([id ? api.getCollection(id) : Promise.resolve(null), api.listItems({ limit: 200 })])
       .then(([col, items]) => {
         if (!active) return;
         setAllItems(items.items);
@@ -103,7 +100,9 @@ export function CollectionEditor() {
         {publicUrl && (
           <p className="muted">
             Public IIIF Collection URL:{" "}
-            <a href={publicUrl} target="_blank" rel="noreferrer">{publicUrl}</a>
+            <a href={publicUrl} target="_blank" rel="noreferrer">
+              {publicUrl}
+            </a>
           </p>
         )}
       </header>
@@ -117,11 +116,7 @@ export function CollectionEditor() {
         </label>
         <label>
           Description
-          <textarea
-            rows={3}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
+          <textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} />
         </label>
         <label className="row">
           <input
@@ -150,9 +145,23 @@ export function CollectionEditor() {
                 <li key={id}>
                   <span>{it.title ?? it.slug}</span>
                   <span className="row">
-                    <button className="btn btn-xs" onClick={() => move(id, -1)} disabled={idx === 0}>↑</button>
-                    <button className="btn btn-xs" onClick={() => move(id, 1)} disabled={idx === selected.length - 1}>↓</button>
-                    <button className="btn btn-xs btn-ghost" onClick={() => toggle(id)}>Remove</button>
+                    <button
+                      className="btn btn-xs"
+                      onClick={() => move(id, -1)}
+                      disabled={idx === 0}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      className="btn btn-xs"
+                      onClick={() => move(id, 1)}
+                      disabled={idx === selected.length - 1}
+                    >
+                      ↓
+                    </button>
+                    <button className="btn btn-xs btn-ghost" onClick={() => toggle(id)}>
+                      Remove
+                    </button>
                   </span>
                 </li>
               );

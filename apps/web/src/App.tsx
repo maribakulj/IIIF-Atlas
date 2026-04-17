@@ -1,9 +1,9 @@
 import { Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout.js";
-import { Dashboard } from "./pages/Dashboard.js";
-import { Library } from "./pages/Library.js";
-import { ItemPage } from "./pages/ItemPage.js";
 import { CollectionEditor } from "./pages/CollectionEditor.js";
+import { Dashboard } from "./pages/Dashboard.js";
+import { ItemPage } from "./pages/ItemPage.js";
+import { Library } from "./pages/Library.js";
 import { Settings } from "./pages/Settings.js";
 
 export function App() {

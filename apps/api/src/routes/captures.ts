@@ -1,18 +1,14 @@
-import type {
-  CapturePayload,
-  CreateCaptureResponse,
-  IngestionMode,
-} from "@iiif-atlas/shared";
+import type { CapturePayload, CreateCaptureResponse, IngestionMode } from "@iiif-atlas/shared";
 import { classifyIIIFJson } from "@iiif-atlas/shared";
-import { badRequest, unprocessable } from "../errors.js";
-import type { Env } from "../env.js";
-import { getLimits } from "../env.js";
-import { assertOutboundUrl } from "../ssrf.js";
-import { safeFetch, safeFetchJson } from "../fetch-safe.js";
 import { mapItem } from "../db.js";
 import type { ItemRow } from "../db.js";
-import { itemSlug, ulid } from "../slug.js";
+import type { Env } from "../env.js";
+import { getLimits } from "../env.js";
+import { badRequest, unprocessable } from "../errors.js";
+import { safeFetch, safeFetchJson } from "../fetch-safe.js";
 import { buildR2Key, putImage } from "../r2.js";
+import { itemSlug, ulid } from "../slug.js";
+import { assertOutboundUrl } from "../ssrf.js";
 
 export async function createCapture(req: Request, env: Env): Promise<Response> {
   const body = (await req.json().catch(() => null)) as CapturePayload | null;

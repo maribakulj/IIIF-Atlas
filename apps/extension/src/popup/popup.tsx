@@ -1,6 +1,6 @@
+import type { CapturePayload, DetectResult, IngestionMode } from "@iiif-atlas/shared";
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import type { CapturePayload, DetectResult, IngestionMode } from "@iiif-atlas/shared";
 import { postCapture } from "../lib/api.js";
 
 function Popup() {
@@ -27,17 +27,13 @@ function Popup() {
           if (res.manifestUrl || res.infoJsonUrl) setMode("iiif_reuse");
         }
       } catch (err) {
-        setError(
-          "Could not read the page. Reload the tab after installing the extension.",
-        );
+        setError("Could not read the page. Reload the tab after installing the extension.");
       }
     })();
   }, []);
 
   function toggle(url: string) {
-    setSelected((prev) =>
-      prev.includes(url) ? prev.filter((x) => x !== url) : [...prev, url],
-    );
+    setSelected((prev) => (prev.includes(url) ? prev.filter((x) => x !== url) : [...prev, url]));
   }
 
   async function addSelected() {
@@ -63,7 +59,8 @@ function Popup() {
       }
 
       // Otherwise POST one capture per selected image.
-      const urls = selected.length > 0 ? selected : detect?.primaryImageUrl ? [detect.primaryImageUrl] : [];
+      const urls =
+        selected.length > 0 ? selected : detect?.primaryImageUrl ? [detect.primaryImageUrl] : [];
       if (urls.length === 0) throw new Error("No image selected");
       for (const imageUrl of urls) {
         const payload: CapturePayload = {
@@ -131,10 +128,7 @@ function Popup() {
         <button disabled={busy} onClick={addSelected}>
           {busy ? "Adding…" : "Add to library"}
         </button>
-        <button
-          className="ghost"
-          onClick={() => chrome.runtime.openOptionsPage()}
-        >
+        <button className="ghost" onClick={() => chrome.runtime.openOptionsPage()}>
           Options
         </button>
       </div>
@@ -146,4 +140,9 @@ function Popup() {
 }
 
 const root = document.getElementById("root");
-if (root) createRoot(root).render(<React.StrictMode><Popup /></React.StrictMode>);
+if (root)
+  createRoot(root).render(
+    <React.StrictMode>
+      <Popup />
+    </React.StrictMode>,
+  );

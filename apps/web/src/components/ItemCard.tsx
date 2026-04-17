@@ -1,13 +1,12 @@
-import { Link } from "react-router-dom";
 import type { Item } from "@iiif-atlas/shared";
-import { ModeBadge } from "./ModeBadge.js";
+import { Link } from "react-router-dom";
 import { API_BASE_URL } from "../lib/config.js";
+import { ModeBadge } from "./ModeBadge.js";
 
 export function ItemCard({ item }: { item: Item }) {
-  const thumb =
-    item.r2Key
-      ? `${API_BASE_URL.replace(/\/$/, "")}/r2/${item.r2Key}`
-      : item.sourceImageUrl ?? undefined;
+  const thumb = item.r2Key
+    ? `${API_BASE_URL.replace(/\/$/, "")}/r2/${item.r2Key}`
+    : (item.sourceImageUrl ?? undefined);
 
   return (
     <Link to={`/items/${item.id}`} className="item-card">

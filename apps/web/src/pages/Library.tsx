@@ -1,6 +1,6 @@
+import type { IngestionMode, Item } from "@iiif-atlas/shared";
 import { useEffect, useState } from "react";
 import { api } from "../api/client.js";
-import type { IngestionMode, Item } from "@iiif-atlas/shared";
 import { ItemCard } from "../components/ItemCard.js";
 
 export function Library() {
@@ -55,7 +55,9 @@ export function Library() {
       {loading && <p>Loading…</p>}
 
       <div className="grid">
-        {items.map((it) => <ItemCard key={it.id} item={it} />)}
+        {items.map((it) => (
+          <ItemCard key={it.id} item={it} />
+        ))}
       </div>
     </div>
   );

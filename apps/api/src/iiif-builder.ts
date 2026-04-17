@@ -1,8 +1,8 @@
-import { buildItemManifest, buildCollection } from "@iiif-atlas/shared";
-import type { Item, Collection, IIIFManifest, IIIFCollection } from "@iiif-atlas/shared";
-import { safeFetchJson } from "./fetch-safe.js";
+import { buildCollection, buildItemManifest } from "@iiif-atlas/shared";
+import type { Collection, IIIFCollection, IIIFManifest, Item } from "@iiif-atlas/shared";
 import { getLimits } from "./env.js";
 import type { Env } from "./env.js";
+import { safeFetchJson } from "./fetch-safe.js";
 
 /**
  * Build a manifest for a stored item. For mode=iiif_reuse we fetch and
@@ -12,10 +12,7 @@ import type { Env } from "./env.js";
  * values; a follow-up can run Image API `info.json` probing or server-side
  * image dimension detection.
  */
-export async function buildManifestForItem(
-  env: Env,
-  item: Item,
-): Promise<IIIFManifest> {
+export async function buildManifestForItem(env: Env, item: Item): Promise<IIIFManifest> {
   const { fetchTimeoutMs, maxBytes } = getLimits(env);
   const publicBaseUrl = env.PUBLIC_BASE_URL.replace(/\/$/, "");
 
@@ -29,7 +26,8 @@ export async function buildManifestForItem(
       if (item.manifestSlug) {
         upstream.id = `${publicBaseUrl}/iiif/manifests/${item.manifestSlug}`;
       }
-      if (!upstream["@context"]) upstream["@context"] = "http://iiif.io/api/presentation/3/context.json";
+      if (!upstream["@context"])
+        upstream["@context"] = "http://iiif.io/api/presentation/3/context.json";
       return upstream;
     } catch {
       // Fall through to synthesized manifest below.

@@ -9,7 +9,9 @@ export function Layout({ children }: { children: ReactNode }) {
           <span className="brand-mark">◎</span> IIIF Atlas
         </Link>
         <nav>
-          <NavLink to="/" end>Dashboard</NavLink>
+          <NavLink to="/" end>
+            Dashboard
+          </NavLink>
           <NavLink to="/library">Library</NavLink>
           <NavLink to="/collections/new">New collection</NavLink>
           <NavLink to="/settings">Settings</NavLink>

@@ -42,9 +42,18 @@ function isPrivateIPv6(host: string): boolean {
   if (stripped.startsWith("fc") || stripped.startsWith("fd")) return true; // ULA
   if (stripped.startsWith("fe80:")) return true; // link-local
   if (stripped.startsWith("::ffff:")) {
-    // IPv4-mapped
-    const v4 = stripped.slice("::ffff:".length);
-    return isPrivateIPv4(v4);
+    // IPv4-mapped — either dotted-quad tail or last-32-bits as two hex groups.
+    const tail = stripped.slice("::ffff:".length);
+    if (tail.includes(".")) return isPrivateIPv4(tail);
+    const parts = tail.split(":");
+    if (parts.length === 2) {
+      const a = Number.parseInt(parts[0] ?? "", 16);
+      const b = Number.parseInt(parts[1] ?? "", 16);
+      if (!Number.isNaN(a) && !Number.isNaN(b)) {
+        const dotted = `${(a >> 8) & 0xff}.${a & 0xff}.${(b >> 8) & 0xff}.${b & 0xff}`;
+        return isPrivateIPv4(dotted);
+      }
+    }
   }
   return false;
 }

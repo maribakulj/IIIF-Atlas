@@ -11,7 +11,7 @@ function matchOrigin(allowed: string[], origin: string | null): string | null {
       if (origin.startsWith(prefix)) return origin;
     }
     if (pattern.includes("*")) {
-      const re = new RegExp(
+      const re: RegExp = new RegExp(
         "^" + pattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*") + "$",
       );
       if (re.test(origin)) return origin;

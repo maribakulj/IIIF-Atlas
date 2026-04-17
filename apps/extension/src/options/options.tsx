@@ -20,16 +20,29 @@ function Options() {
     <div>
       <h1>IIIF Atlas — Options</h1>
       <p className="muted">
-        Point the extension at your Cloudflare Workers API. Captures are POSTed
-        to <code>&lt;API&gt;/api/captures</code>.
+        Point the extension at your Cloudflare Workers API. Captures are POSTed to{" "}
+        <code>&lt;API&gt;/api/captures</code>.
       </p>
       <label>API base URL</label>
-      <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="https://api.iiif-atlas.example.com" />
+      <input
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        placeholder="https://api.iiif-atlas.example.com"
+      />
       <button onClick={save}>Save</button>
-      {saved && <span className="ok" style={{ marginLeft: 8 }}>Saved</span>}
+      {saved && (
+        <span className="ok" style={{ marginLeft: 8 }}>
+          Saved
+        </span>
+      )}
     </div>
   );
 }
 
 const root = document.getElementById("root");
-if (root) createRoot(root).render(<React.StrictMode><Options /></React.StrictMode>);
+if (root)
+  createRoot(root).render(
+    <React.StrictMode>
+      <Options />
+    </React.StrictMode>,
+  );

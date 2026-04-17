@@ -3,11 +3,11 @@ import type {
   CollectionResponse,
   ListCollectionsResponse,
 } from "@iiif-atlas/shared";
-import { badRequest, notFound } from "../errors.js";
-import type { Env } from "../env.js";
 import { mapCollection, mapItem } from "../db.js";
 import type { CollectionRow, ItemRow } from "../db.js";
-import { slugify, ulid, shortId } from "../slug.js";
+import type { Env } from "../env.js";
+import { badRequest, notFound } from "../errors.js";
+import { shortId, slugify, ulid } from "../slug.js";
 
 export async function listCollections(_req: Request, env: Env): Promise<Response> {
   const rows = await env.DB.prepare(
@@ -16,9 +16,7 @@ export async function listCollections(_req: Request, env: Env): Promise<Response
   ).all<CollectionRow & { item_count: number }>();
 
   const payload: ListCollectionsResponse = {
-    collections: (rows.results ?? []).map((r) =>
-      mapCollection(r, r.item_count ?? 0),
-    ),
+    collections: (rows.results ?? []).map((r) => mapCollection(r, r.item_count ?? 0)),
   };
   return Response.json(payload);
 }
@@ -100,9 +98,7 @@ export async function updateCollection(
   }
 
   if (Array.isArray(body.itemIds)) {
-    await env.DB.prepare(`DELETE FROM collection_items WHERE collection_id = ?`)
-      .bind(row.id)
-      .run();
+    await env.DB.prepare(`DELETE FROM collection_items WHERE collection_id = ?`).bind(row.id).run();
     if (body.itemIds.length > 0) {
       const stmts = body.itemIds.map((itemId, idx) =>
         env.DB.prepare(
@@ -116,11 +112,7 @@ export async function updateCollection(
   return getCollectionResponse(env, row.id, 200);
 }
 
-async function getCollectionResponse(
-  env: Env,
-  id: string,
-  status: number,
-): Promise<Response> {
+async function getCollectionResponse(env: Env, id: string, status: number): Promise<Response> {
   const row = await env.DB.prepare(`SELECT * FROM collections WHERE id = ?`)
     .bind(id)
     .first<CollectionRow>();
