@@ -34,9 +34,19 @@ export async function buildManifestForItem(env: Env, item: Item): Promise<IIIFMa
     }
   }
 
-  const imageUrl = resolveImageUrl(env, item);
   const width = item.width ?? 1000;
   const height = item.height ?? 1000;
+  const format = item.mimeType ?? "image/jpeg";
+
+  // For cached items we route through our own Image API service so that
+  // viewers (Mirador, UV) get a real ImageService3 reference and the
+  // canonical body URI is the IIIF level-0 endpoint rather than a raw R2
+  // URL. For reference-only items we fall back to the original source.
+  const useImageService = item.mode === "cached" && item.assetSha256;
+  const serviceId = useImageService ? `${publicBaseUrl}/iiif/image/${item.assetSha256}` : null;
+  const imageUrl = serviceId
+    ? `${serviceId}/full/max/0/default.${nativeExtForMime(format)}`
+    : resolveImageUrl(env, item);
 
   return buildItemManifest({
     item,
@@ -44,8 +54,32 @@ export async function buildManifestForItem(env: Env, item: Item): Promise<IIIFMa
     imageUrl,
     width,
     height,
-    format: item.mimeType ?? "image/jpeg",
+    format,
+    ...(serviceId
+      ? { imageService: { id: serviceId, type: "ImageService3", profile: "level0" } }
+      : {}),
   });
+}
+
+function nativeExtForMime(mime: string): string {
+  switch (mime) {
+    case "image/jpeg":
+      return "jpg";
+    case "image/png":
+      return "png";
+    case "image/webp":
+      return "webp";
+    case "image/gif":
+      return "gif";
+    case "image/tiff":
+      return "tif";
+    case "image/avif":
+      return "avif";
+    case "image/svg+xml":
+      return "svg";
+    default:
+      return "bin";
+  }
 }
 
 export function buildCollectionManifest(

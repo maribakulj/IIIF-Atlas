@@ -68,6 +68,31 @@ iiif-atlas/
 - `source_manifest_url` is preserved in item metadata when `iiif_reuse` is used.
 - Captures are stored raw in the `captures` table alongside the resulting item for audit.
 
+## IIIF Image API (Sprint 3)
+
+Every cached asset is served through a real IIIF Image API 3 service —
+not just as a raw blob. This means viewers (Mirador, Universal Viewer)
+discover an `info.json` and treat the image as first-class IIIF content.
+
+| Endpoint                                                                | Behaviour                          |
+|-------------------------------------------------------------------------|------------------------------------|
+| `GET /iiif/image/<sha256>/info.json`                                    | Level-0 info.json with width/height|
+| `GET /iiif/image/<sha256>/full/max/0/default.<native-ext>`              | Streams the asset from R2          |
+| Anything else (region / size / rotation / format conversion)            | `501 Not Implemented` (level 0)    |
+
+The asset's `sha256` is the content-addressed identifier we already
+mint at ingestion time, so URLs are inherently immutable.
+
+Manifests for `mode = 'cached'` items now embed an `ImageService3`
+reference on the canvas annotation body, with `id =
+{publicBaseUrl}/iiif/image/{sha256}` and `profile = level0`. Forward
+upgrades to level 1+ (with tiles) become invisible to clients —
+they just keep working better.
+
+For `mode = 'iiif_reuse'` items we forward the upstream manifest's
+canvases and services unchanged (only rewriting the manifest's `id` to
+our public URL).
+
 ## Ingestion pipeline (Sprint 2)
 
 Cached-mode captures are processed asynchronously via Cloudflare Queues

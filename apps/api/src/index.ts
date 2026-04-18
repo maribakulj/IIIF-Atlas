@@ -15,6 +15,7 @@ import {
   updateCollection,
 } from "./routes/collections.js";
 import { getCollectionBySlug, getManifestBySlug } from "./routes/iiif.js";
+import { getImageData, getImageInfo } from "./routes/image.js";
 import { generateManifest, getItem, listItems, patchItem, retryItem } from "./routes/items.js";
 
 const router = new Router()
@@ -36,6 +37,8 @@ const router = new Router()
   .patch("/api/collections/:id", updateCollection)
   .get("/iiif/manifests/:slug", getManifestBySlug)
   .get("/iiif/collections/:slug", getCollectionBySlug)
+  .get("/iiif/image/:id/info.json", getImageInfo)
+  .get("/iiif/image/:id/:region/:size/:rotation/:filename", getImageData)
   .get("/healthz", () => new Response("ok", { status: 200 }));
 
 export default {

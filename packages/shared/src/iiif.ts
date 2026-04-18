@@ -80,6 +80,22 @@ export interface IIIFCollection {
 }
 
 export const IIIF_CONTEXT = "http://iiif.io/api/presentation/3/context.json";
+export const IIIF_IMAGE_CONTEXT = "http://iiif.io/api/image/3/context.json";
+
+/** Image API 3 info.json shape (minimal — level 0 today). */
+export interface IIIFImageInfo3 {
+  "@context": string;
+  id: string;
+  type: "ImageService3";
+  protocol: "http://iiif.io/api/image";
+  profile: "level0" | "level1" | "level2";
+  width: number;
+  height: number;
+  /** Optional tile pyramid; absent at level 0. */
+  tiles?: Array<{ width: number; height?: number; scaleFactors: number[] }>;
+  /** Mime types the service can return. */
+  extraFormats?: string[];
+}
 
 export function label(value: string, lang = "none"): IIIFLabel {
   return { [lang]: [value] };
