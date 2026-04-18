@@ -4,6 +4,7 @@ import { HttpError, notFound } from "./errors.js";
 import { Router } from "./router.js";
 
 import { streamR2Object } from "./r2.js";
+import { createApiKey, devSignup, listApiKeys, me, revokeApiKey } from "./routes/auth.js";
 import { createCapture } from "./routes/captures.js";
 import {
   createCollection,
@@ -15,6 +16,11 @@ import { getCollectionBySlug, getManifestBySlug } from "./routes/iiif.js";
 import { generateManifest, getItem, listItems, patchItem } from "./routes/items.js";
 
 const router = new Router()
+  .post("/api/auth/dev-signup", devSignup)
+  .get("/api/auth/me", me)
+  .get("/api/auth/api-keys", listApiKeys)
+  .post("/api/auth/api-keys", createApiKey)
+  .del("/api/auth/api-keys/:id", revokeApiKey)
   .post("/api/captures", createCapture)
   .get("/api/items", listItems)
   .post("/api/items", createCapture) // POST /api/items is an alias used by the web app

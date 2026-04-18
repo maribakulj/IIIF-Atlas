@@ -3,24 +3,51 @@ import type {
   Collection,
   CollectionCreate,
   CollectionResponse,
+  CreateApiKeyRequest,
+  CreateApiKeyResponse,
   CreateCaptureResponse,
+  DevSignupRequest,
+  DevSignupResponse,
   GenerateManifestResponse,
   Item,
   ItemPatch,
   ItemResponse,
+  ListApiKeysResponse,
   ListCollectionsResponse,
   ListItemsResponse,
+  MeResponse,
 } from "@iiif-atlas/shared";
+import { getApiKey, setApiKey } from "../lib/auth.js";
 import { apiUrl } from "../lib/config.js";
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(apiUrl(path), {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init.headers ?? {}),
-    },
-  });
+export class ApiError extends Error {
+  status: number;
+  code: string;
+  constructor(status: number, code: string, message: string) {
+    super(message);
+    this.status = status;
+    this.code = code;
+  }
+}
+
+async function request<T>(
+  path: string,
+  init: RequestInit = {},
+  opts: { auth?: boolean } = {},
+): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...((init.headers as Record<string, string>) ?? {}),
+  };
+  if (opts.auth !== false) {
+    const key = getApiKey();
+    if (key) headers["Authorization"] = `Bearer ${key}`;
+  }
+  const res = await fetch(apiUrl(path), { ...init, headers });
+  if (res.status === 401) {
+    // Forget the bad key so the app routes back to sign-in.
+    setApiKey(null);
+  }
   if (!res.ok) {
     let body: unknown;
     try {
@@ -28,14 +55,34 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     } catch {
       body = await res.text();
     }
-    const msg = (body as { message?: string })?.message ?? `HTTP ${res.status}`;
-    throw new Error(msg);
+    const b = body as { code?: string; error?: string; message?: string };
+    throw new ApiError(res.status, b.code ?? b.error ?? "error", b.message ?? `HTTP ${res.status}`);
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
 
 export const api = {
+  // -- auth ----------------------------------------------------------
+  devSignup: (body: DevSignupRequest) =>
+    request<DevSignupResponse>(
+      "/api/auth/dev-signup",
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+      { auth: false },
+    ),
+  me: () => request<MeResponse>("/api/auth/me"),
+  listApiKeys: () => request<ListApiKeysResponse>("/api/auth/api-keys"),
+  createApiKey: (body: CreateApiKeyRequest) =>
+    request<CreateApiKeyResponse>("/api/auth/api-keys", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  revokeApiKey: (id: string) => request<void>(`/api/auth/api-keys/${id}`, { method: "DELETE" }),
+
+  // -- items / captures / collections --------------------------------
   listItems: (opts: { q?: string; mode?: string; limit?: number; offset?: number } = {}) => {
     const q = new URLSearchParams();
     if (opts.q) q.set("q", opts.q);

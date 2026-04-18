@@ -3,17 +3,23 @@ import type {
   CollectionResponse,
   ListCollectionsResponse,
 } from "@iiif-atlas/shared";
+import { requireAuth, requireWriter } from "../auth.js";
 import { mapCollection, mapItem } from "../db.js";
 import type { CollectionRow, ItemRow } from "../db.js";
 import type { Env } from "../env.js";
 import { badRequest, notFound } from "../errors.js";
 import { shortId, slugify, ulid } from "../slug.js";
 
-export async function listCollections(_req: Request, env: Env): Promise<Response> {
+export async function listCollections(req: Request, env: Env): Promise<Response> {
+  const auth = await requireAuth(req, env);
   const rows = await env.DB.prepare(
     `SELECT c.*, (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS item_count
-     FROM collections c ORDER BY c.updated_at DESC`,
-  ).all<CollectionRow & { item_count: number }>();
+       FROM collections c
+      WHERE c.workspace_id = ?
+      ORDER BY c.updated_at DESC`,
+  )
+    .bind(auth.workspaceId)
+    .all<CollectionRow & { item_count: number }>();
 
   const payload: ListCollectionsResponse = {
     collections: (rows.results ?? []).map((r) => mapCollection(r, r.item_count ?? 0)),
@@ -22,6 +28,8 @@ export async function listCollections(_req: Request, env: Env): Promise<Response
 }
 
 export async function createCollection(req: Request, env: Env): Promise<Response> {
+  const auth = await requireAuth(req, env);
+  requireWriter(auth);
   const body = (await req.json().catch(() => null)) as CollectionCreate | null;
   if (!body || typeof body !== "object") throw badRequest("Invalid JSON body");
   if (!body.title || typeof body.title !== "string") throw badRequest("title is required");
@@ -30,31 +38,53 @@ export async function createCollection(req: Request, env: Env): Promise<Response
   const slug = `${slugify(body.title, "collection")}-${shortId(6)}`;
 
   await env.DB.prepare(
-    `INSERT INTO collections (id, slug, title, description, is_public) VALUES (?,?,?,?,?)`,
+    `INSERT INTO collections (id, slug, title, description, is_public, workspace_id)
+     VALUES (?,?,?,?,?,?)`,
   )
-    .bind(id, slug, body.title, body.description ?? null, body.isPublic === false ? 0 : 1)
+    .bind(
+      id,
+      slug,
+      body.title,
+      body.description ?? null,
+      body.isPublic === false ? 0 : 1,
+      auth.workspaceId,
+    )
     .run();
 
   if (body.itemIds && body.itemIds.length > 0) {
-    const stmts = body.itemIds.map((itemId, idx) =>
-      env.DB.prepare(
-        `INSERT OR IGNORE INTO collection_items (collection_id, item_id, position) VALUES (?,?,?)`,
-      ).bind(id, itemId, idx),
-    );
-    await env.DB.batch(stmts);
+    // Only attach items that belong to the same workspace.
+    const place = body.itemIds.map(() => "?").join(",");
+    const owned = await env.DB.prepare(
+      `SELECT id FROM items WHERE workspace_id = ? AND id IN (${place})`,
+    )
+      .bind(auth.workspaceId, ...body.itemIds)
+      .all<{ id: string }>();
+    const ownedIds = new Set((owned.results ?? []).map((r) => r.id));
+    const accepted = body.itemIds.filter((iid) => ownedIds.has(iid));
+    if (accepted.length > 0) {
+      const stmts = accepted.map((itemId, idx) =>
+        env.DB.prepare(
+          `INSERT OR IGNORE INTO collection_items (collection_id, item_id, position) VALUES (?,?,?)`,
+        ).bind(id, itemId, idx),
+      );
+      await env.DB.batch(stmts);
+    }
   }
 
   return getCollectionResponse(env, id, 201);
 }
 
 export async function getCollection(
-  _req: Request,
+  req: Request,
   env: Env,
   _ctx: ExecutionContext,
   params: Record<string, string>,
 ): Promise<Response> {
-  const row = await env.DB.prepare(`SELECT * FROM collections WHERE id = ? OR slug = ?`)
-    .bind(params.id, params.id)
+  const auth = await requireAuth(req, env);
+  const row = await env.DB.prepare(
+    `SELECT * FROM collections WHERE (id = ? OR slug = ?) AND workspace_id = ?`,
+  )
+    .bind(params.id, params.id, auth.workspaceId)
     .first<CollectionRow>();
   if (!row) throw notFound();
   return getCollectionResponse(env, row.id, 200);
@@ -66,13 +96,17 @@ export async function updateCollection(
   _ctx: ExecutionContext,
   params: Record<string, string>,
 ): Promise<Response> {
+  const auth = await requireAuth(req, env);
+  requireWriter(auth);
   const body = (await req.json().catch(() => null)) as
     | (Partial<CollectionCreate> & { itemIds?: string[] })
     | null;
   if (!body || typeof body !== "object") throw badRequest("Invalid JSON body");
 
-  const row = await env.DB.prepare(`SELECT * FROM collections WHERE id = ? OR slug = ?`)
-    .bind(params.id, params.id)
+  const row = await env.DB.prepare(
+    `SELECT * FROM collections WHERE (id = ? OR slug = ?) AND workspace_id = ?`,
+  )
+    .bind(params.id, params.id, auth.workspaceId)
     .first<CollectionRow>();
   if (!row) throw notFound();
 
@@ -100,12 +134,22 @@ export async function updateCollection(
   if (Array.isArray(body.itemIds)) {
     await env.DB.prepare(`DELETE FROM collection_items WHERE collection_id = ?`).bind(row.id).run();
     if (body.itemIds.length > 0) {
-      const stmts = body.itemIds.map((itemId, idx) =>
-        env.DB.prepare(
-          `INSERT OR IGNORE INTO collection_items (collection_id, item_id, position) VALUES (?,?,?)`,
-        ).bind(row.id, itemId, idx),
-      );
-      await env.DB.batch(stmts);
+      const place = body.itemIds.map(() => "?").join(",");
+      const owned = await env.DB.prepare(
+        `SELECT id FROM items WHERE workspace_id = ? AND id IN (${place})`,
+      )
+        .bind(auth.workspaceId, ...body.itemIds)
+        .all<{ id: string }>();
+      const ownedIds = new Set((owned.results ?? []).map((r) => r.id));
+      const accepted = body.itemIds.filter((iid) => ownedIds.has(iid));
+      if (accepted.length > 0) {
+        const stmts = accepted.map((itemId, idx) =>
+          env.DB.prepare(
+            `INSERT OR IGNORE INTO collection_items (collection_id, item_id, position) VALUES (?,?,?)`,
+          ).bind(row.id, itemId, idx),
+        );
+        await env.DB.batch(stmts);
+      }
     }
   }
 

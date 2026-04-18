@@ -1,5 +1,6 @@
 import type { CapturePayload, CreateCaptureResponse, IngestionMode } from "@iiif-atlas/shared";
 import { classifyIIIFJson } from "@iiif-atlas/shared";
+import { requireAuth, requireWriter } from "../auth.js";
 import { mapItem } from "../db.js";
 import type { ItemRow } from "../db.js";
 import type { Env } from "../env.js";
@@ -11,6 +12,8 @@ import { itemSlug, ulid } from "../slug.js";
 import { assertOutboundUrl } from "../ssrf.js";
 
 export async function createCapture(req: Request, env: Env): Promise<Response> {
+  const auth = await requireAuth(req, env);
+  requireWriter(auth);
   const body = (await req.json().catch(() => null)) as CapturePayload | null;
   if (!body || typeof body !== "object") throw badRequest("Invalid JSON body");
 
@@ -82,8 +85,9 @@ export async function createCapture(req: Request, env: Env): Promise<Response> {
         source_page_url, source_page_title, source_image_url, source_manifest_url,
         r2_key, mime_type, byte_size,
         manifest_slug,
-        captured_at, metadata_json
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        captured_at, metadata_json,
+        workspace_id
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     ).bind(
       itemId,
       slug,
@@ -100,10 +104,11 @@ export async function createCapture(req: Request, env: Env): Promise<Response> {
       manifestSlug,
       capturedAt,
       metadataJson,
+      auth.workspaceId,
     ),
     env.DB.prepare(
-      `INSERT INTO captures (id, payload_json, resulting_item_id) VALUES (?,?,?)`,
-    ).bind(captureId, JSON.stringify(body), itemId),
+      `INSERT INTO captures (id, payload_json, resulting_item_id, workspace_id) VALUES (?,?,?,?)`,
+    ).bind(captureId, JSON.stringify(body), itemId, auth.workspaceId),
   ]);
 
   const row = await env.DB.prepare(`SELECT * FROM items WHERE id = ?`)

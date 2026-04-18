@@ -83,6 +83,59 @@ export interface CollectionCreate {
   itemIds?: string[];
 }
 
+export interface User {
+  id: string;
+  email: string;
+  displayName: string | null;
+  createdAt: string;
+}
+
+export interface Workspace {
+  id: string;
+  slug: string;
+  name: string;
+  ownerUserId: string;
+  createdAt: string;
+}
+
+export type WorkspaceRole = "owner" | "editor" | "viewer";
+
+export interface WorkspaceMembership {
+  workspace: Workspace;
+  role: WorkspaceRole;
+}
+
+export interface ApiKeySummary {
+  id: string;
+  name: string;
+  prefix: string;
+  workspaceId: string;
+  scopes: string[] | null;
+  lastUsedAt: string | null;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+/** Returned only at creation time; never persisted in plaintext. */
+export interface ApiKeyWithSecret extends ApiKeySummary {
+  /** The raw token, e.g. `iia_…`. Show once, store nowhere. */
+  secret: string;
+}
+
+export interface DevSignupRequest {
+  email: string;
+  displayName?: string;
+  workspaceName?: string;
+}
+
+export interface AuthMe {
+  user: User;
+  memberships: WorkspaceMembership[];
+  /** Workspace the request was authenticated against (from the API key). */
+  activeWorkspace: Workspace | null;
+  role: WorkspaceRole | null;
+}
+
 export interface DetectResult {
   /** Highest-confidence direct image URL on the page. */
   primaryImageUrl?: string;

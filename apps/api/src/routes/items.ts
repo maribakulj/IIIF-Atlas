@@ -4,6 +4,7 @@ import type {
   ItemResponse,
   ListItemsResponse,
 } from "@iiif-atlas/shared";
+import { requireAuth, requireWriter } from "../auth.js";
 import { mapItem } from "../db.js";
 import type { ItemRow } from "../db.js";
 import type { Env } from "../env.js";
@@ -11,14 +12,15 @@ import { badRequest, notFound } from "../errors.js";
 import { buildManifestForItem } from "../iiif-builder.js";
 
 export async function listItems(req: Request, env: Env): Promise<Response> {
+  const auth = await requireAuth(req, env);
   const url = new URL(req.url);
   const limit = Math.min(Number(url.searchParams.get("limit") ?? "50"), 200);
   const offset = Math.max(Number(url.searchParams.get("offset") ?? "0"), 0);
   const q = url.searchParams.get("q");
   const mode = url.searchParams.get("mode");
 
-  const where: string[] = [];
-  const binds: unknown[] = [];
+  const where: string[] = ["workspace_id = ?"];
+  const binds: unknown[] = [auth.workspaceId];
   if (q) {
     where.push("(title LIKE ? OR description LIKE ? OR source_page_title LIKE ?)");
     const like = `%${q}%`;
@@ -28,7 +30,7 @@ export async function listItems(req: Request, env: Env): Promise<Response> {
     where.push("mode = ?");
     binds.push(mode);
   }
-  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const whereSql = `WHERE ${where.join(" AND ")}`;
 
   const totalRow = await env.DB.prepare(`SELECT COUNT(*) AS c FROM items ${whereSql}`)
     .bind(...binds)
@@ -51,13 +53,16 @@ export async function listItems(req: Request, env: Env): Promise<Response> {
 }
 
 export async function getItem(
-  _req: Request,
+  req: Request,
   env: Env,
   _ctx: ExecutionContext,
   params: Record<string, string>,
 ): Promise<Response> {
-  const row = await env.DB.prepare(`SELECT * FROM items WHERE id = ? OR slug = ?`)
-    .bind(params.id, params.id)
+  const auth = await requireAuth(req, env);
+  const row = await env.DB.prepare(
+    `SELECT * FROM items WHERE (id = ? OR slug = ?) AND workspace_id = ?`,
+  )
+    .bind(params.id, params.id, auth.workspaceId)
     .first<ItemRow>();
   if (!row) throw notFound();
   const payload: ItemResponse = { item: mapItem(row, env.PUBLIC_BASE_URL) };
@@ -70,11 +75,15 @@ export async function patchItem(
   _ctx: ExecutionContext,
   params: Record<string, string>,
 ): Promise<Response> {
+  const auth = await requireAuth(req, env);
+  requireWriter(auth);
   const body = (await req.json().catch(() => null)) as ItemPatch | null;
   if (!body || typeof body !== "object") throw badRequest("Invalid JSON body");
 
-  const row = await env.DB.prepare(`SELECT * FROM items WHERE id = ? OR slug = ?`)
-    .bind(params.id, params.id)
+  const row = await env.DB.prepare(
+    `SELECT * FROM items WHERE (id = ? OR slug = ?) AND workspace_id = ?`,
+  )
+    .bind(params.id, params.id, auth.workspaceId)
     .first<ItemRow>();
   if (!row) throw notFound();
 
@@ -117,13 +126,17 @@ export async function patchItem(
 }
 
 export async function generateManifest(
-  _req: Request,
+  req: Request,
   env: Env,
   _ctx: ExecutionContext,
   params: Record<string, string>,
 ): Promise<Response> {
-  const row = await env.DB.prepare(`SELECT * FROM items WHERE id = ? OR slug = ?`)
-    .bind(params.id, params.id)
+  const auth = await requireAuth(req, env);
+  requireWriter(auth);
+  const row = await env.DB.prepare(
+    `SELECT * FROM items WHERE (id = ? OR slug = ?) AND workspace_id = ?`,
+  )
+    .bind(params.id, params.id, auth.workspaceId)
     .first<ItemRow>();
   if (!row) throw notFound();
 

@@ -1,17 +1,21 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { getApiBase, setApiBase } from "../lib/api.js";
+import { getSettings, setApiBase, setApiKey } from "../lib/api.js";
 
 function Options() {
-  const [value, setValue] = useState("");
+  const [apiBase, setApiBaseLocal] = useState("");
+  const [apiKey, setApiKeyLocal] = useState("");
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    getApiBase().then(setValue);
+    getSettings().then((s) => {
+      setApiBaseLocal(s.apiBase);
+      setApiKeyLocal(s.apiKey ?? "");
+    });
   }, []);
 
   async function save() {
-    await setApiBase(value.trim());
+    await Promise.all([setApiBase(apiBase.trim()), setApiKey(apiKey.trim())]);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -20,15 +24,17 @@ function Options() {
     <div>
       <h1>IIIF Atlas — Options</h1>
       <p className="muted">
-        Point the extension at your Cloudflare Workers API. Captures are POSTed to{" "}
-        <code>&lt;API&gt;/api/captures</code>.
+        Captures are POSTed to <code>&lt;API&gt;/api/captures</code> with your API key as a Bearer
+        token. Mint keys from the web app's Settings page.
       </p>
       <label>API base URL</label>
       <input
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
+        value={apiBase}
+        onChange={(e) => setApiBaseLocal(e.target.value)}
         placeholder="https://api.iiif-atlas.example.com"
       />
+      <label style={{ marginTop: 12, display: "block" }}>API key</label>
+      <input value={apiKey} onChange={(e) => setApiKeyLocal(e.target.value)} placeholder="iia_…" />
       <button onClick={save}>Save</button>
       {saved && (
         <span className="ok" style={{ marginLeft: 8 }}>

@@ -1,4 +1,14 @@
-import type { CapturePayload, Collection, CollectionCreate, Item, ItemPatch } from "./types.js";
+import type {
+  ApiKeySummary,
+  ApiKeyWithSecret,
+  AuthMe,
+  CapturePayload,
+  Collection,
+  CollectionCreate,
+  DevSignupRequest,
+  Item,
+  ItemPatch,
+} from "./types.js";
 
 /** Response envelopes for the REST API. */
 
@@ -40,5 +50,27 @@ export interface GenerateManifestResponse {
   manifestUrl: string;
 }
 
+export interface DevSignupResponse {
+  user: { id: string; email: string; displayName: string | null };
+  workspace: { id: string; slug: string; name: string };
+  apiKey: ApiKeyWithSecret;
+}
+
+export interface ListApiKeysResponse {
+  keys: ApiKeySummary[];
+}
+
+export interface CreateApiKeyRequest {
+  name: string;
+  workspaceId?: string;
+  scopes?: string[] | null;
+}
+
+export interface CreateApiKeyResponse {
+  key: ApiKeyWithSecret;
+}
+
+export interface MeResponse extends AuthMe {}
+
 // Re-export request bodies for symmetry
-export type { CapturePayload, ItemPatch, CollectionCreate };
+export type { CapturePayload, ItemPatch, CollectionCreate, DevSignupRequest };

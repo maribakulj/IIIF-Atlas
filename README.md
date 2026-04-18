@@ -68,10 +68,49 @@ iiif-atlas/
 - `source_manifest_url` is preserved in item metadata when `iiif_reuse` is used.
 - Captures are stored raw in the `captures` table alongside the resulting item for audit.
 
+## Auth (Sprint 1)
+
+- **API keys** (Bearer tokens) authenticate every mutation and every
+  workspace-scoped read. Format: `iia_` + 32 crockford chars; only the
+  SHA-256 hex digest is stored at rest.
+- **Workspaces** isolate data: every item / collection / capture carries a
+  `workspace_id`. Cross-workspace reads return 404, never 200, even when
+  hitting an item by direct ID.
+- **Roles**: `owner`, `editor`, `viewer`. Viewers can read; owners and
+  editors mutate. (Bypassable for the workspace's owner since they own the
+  default key on signup.)
+- **Bootstrap**: with `ALLOW_DEV_SIGNUP=true` (set in `wrangler.toml` for
+  local + staging, off in production), `POST /api/auth/dev-signup` creates
+  a user + a workspace + a first API key in one call. The web app's sign-in
+  screen calls this in dev. In production, mint keys via `wrangler d1
+  execute` or expose your own SSO flow.
+- **Public IIIF endpoints stay public**: `GET /iiif/manifests/:slug` and
+  `GET /iiif/collections/:slug` (when `is_public = 1`) are reachable
+  without a key — the whole point of publishing.
+
+Routes summary:
+
+| Endpoint                                      | Auth      | Notes                  |
+|-----------------------------------------------|-----------|------------------------|
+| `POST /api/auth/dev-signup`                   | none      | gated by env flag      |
+| `GET  /api/auth/me`                           | required  | identity + workspaces  |
+| `GET/POST /api/auth/api-keys`                 | required  | list, mint             |
+| `DELETE /api/auth/api-keys/:id`               | required  | revoke                 |
+| `POST /api/captures`                          | writer    | workspace-scoped       |
+| `GET/PATCH /api/items[/:id]`                  | writer*   | workspace-scoped       |
+| `POST /api/items/:id/generate-manifest`       | writer    | workspace-scoped       |
+| `GET/POST/PATCH /api/collections[/:id]`       | writer*   | workspace-scoped       |
+| `GET /iiif/manifests/:slug`                   | none      | public                 |
+| `GET /iiif/collections/:slug`                 | none      | only if `is_public`    |
+| `GET /r2/<key>`                               | none      | public passthrough     |
+
+`writer*`: GET only requires authentication; PATCH/POST require non-viewer.
+
 ## Security
 
-- SSRF guard blocks loopback, link-local, private, CGNAT, multicast, and IPv6 private ranges,
-  plus disallowed schemes and URL userinfo (`apps/api/src/ssrf.ts`).
+- SSRF guard blocks loopback, link-local, private, CGNAT, multicast, and IPv6 private ranges
+  (including IPv4-mapped IPv6 in normalized hex form), plus disallowed schemes and URL
+  userinfo (`apps/api/src/ssrf.ts`).
 - `safeFetch` enforces a per-request byte cap (`MAX_DOWNLOAD_BYTES`, default 25 MiB),
   an `AbortController` timeout (`FETCH_TIMEOUT_MS`, default 15 s), and a MIME allow-list
   (`ALLOWED_MIME_TYPES`).

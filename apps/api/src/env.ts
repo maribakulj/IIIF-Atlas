@@ -6,6 +6,8 @@ export interface Env {
   MAX_DOWNLOAD_BYTES: string;
   FETCH_TIMEOUT_MS: string;
   ALLOWED_MIME_TYPES: string;
+  /** When "true", `POST /api/auth/dev-signup` is enabled. */
+  ALLOW_DEV_SIGNUP: string;
 }
 
 export function getLimits(env: Env) {

@@ -27,6 +27,7 @@ export default defineWorkersConfig(async () => {
               FETCH_TIMEOUT_MS: "15000",
               ALLOWED_MIME_TYPES:
                 "image/jpeg,image/png,image/webp,image/gif,image/tiff,image/avif,image/svg+xml,application/json,application/ld+json",
+              ALLOW_DEV_SIGNUP: "true",
               TEST_MIGRATIONS: migrations,
             },
           },
