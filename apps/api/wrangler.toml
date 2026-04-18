@@ -25,6 +25,21 @@ binding = "BUCKET"
 bucket_name = "iiif-atlas-media"
 preview_bucket_name = "iiif-atlas-media-preview"
 
+# Cloudflare Queue for cached-image ingestion. Comment out the producer +
+# consumer if you don't have Queues enabled — the API will fall back to
+# inline execution (good enough for single-instance dev, but blocks the
+# request on download/probe/R2-put work).
+# [[queues.producers]]
+# binding = "INGEST_QUEUE"
+# queue = "iiif-atlas-ingest"
+#
+# [[queues.consumers]]
+# queue = "iiif-atlas-ingest"
+# max_batch_size = 10
+# max_batch_timeout = 5
+# max_retries = 5
+# dead_letter_queue = "iiif-atlas-ingest-dlq"
+
 # Production overrides
 [env.production.vars]
 PUBLIC_BASE_URL = "https://api.iiif-atlas.example.com"

@@ -68,6 +68,36 @@ iiif-atlas/
 - `source_manifest_url` is preserved in item metadata when `iiif_reuse` is used.
 - Captures are stored raw in the `captures` table alongside the resulting item for audit.
 
+## Ingestion pipeline (Sprint 2)
+
+Cached-mode captures are processed asynchronously via Cloudflare Queues
+(or inline when no `INGEST_QUEUE` binding is configured — for tests /
+single-instance dev).
+
+Lifecycle:
+
+1. `POST /api/captures` (mode=`cached`) creates the item with
+   `status='processing'` and enqueues an `ingest_cached` job.
+2. The queue consumer (`queue()` export) downloads via `safeFetch`
+   (SSRF + size + MIME guards), computes SHA-256, and:
+   - **dedupes** against the `assets` table — a bytewise duplicate already
+     in R2 is reused without re-storing.
+   - **probes dimensions** via the magic-bytes parser
+     (`apps/api/src/image-probe.ts`, supports PNG / JPEG / GIF / WebP) and
+     persists `(sha256, mime, byte_size, width, height, r2_key)`.
+   - flips the item to `status='ready'` with the resolved `r2Key`,
+     `assetSha256`, dimensions, etc.
+3. Failures land as `status='failed'` with an `errorMessage`. The web app
+   shows a retry button; `POST /api/items/:id/retry` re-enqueues.
+
+Response codes:
+
+- `201` when ingestion ran inline (sync path: no queue binding).
+- `202` when handed off to the queue (async path).
+
+Either way the response carries the freshly-inserted item, and the
+client can poll `GET /api/items/:id` until `status === 'ready'`.
+
 ## Auth (Sprint 1)
 
 - **API keys** (Bearer tokens) authenticate every mutation and every

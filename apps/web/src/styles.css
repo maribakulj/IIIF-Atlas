@@ -255,6 +255,14 @@ textarea {
 .badge-iiif_reuse {
   color: var(--iiif);
 }
+.status-processing {
+  color: var(--accent);
+  border-color: rgba(122, 162, 247, 0.35);
+}
+.status-failed {
+  color: var(--danger);
+  border-color: rgba(255, 107, 107, 0.35);
+}
 
 .alert {
   padding: 10px 12px;

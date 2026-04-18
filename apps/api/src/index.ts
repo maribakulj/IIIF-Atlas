@@ -3,6 +3,8 @@ import type { Env } from "./env.js";
 import { HttpError, notFound } from "./errors.js";
 import { Router } from "./router.js";
 
+import { processIngestJob } from "./ingest.js";
+import type { IngestMessage } from "./queue.js";
 import { streamR2Object } from "./r2.js";
 import { createApiKey, devSignup, listApiKeys, me, revokeApiKey } from "./routes/auth.js";
 import { createCapture } from "./routes/captures.js";
@@ -13,7 +15,7 @@ import {
   updateCollection,
 } from "./routes/collections.js";
 import { getCollectionBySlug, getManifestBySlug } from "./routes/iiif.js";
-import { generateManifest, getItem, listItems, patchItem } from "./routes/items.js";
+import { generateManifest, getItem, listItems, patchItem, retryItem } from "./routes/items.js";
 
 const router = new Router()
   .post("/api/auth/dev-signup", devSignup)
@@ -27,6 +29,7 @@ const router = new Router()
   .get("/api/items/:id", getItem)
   .patch("/api/items/:id", patchItem)
   .post("/api/items/:id/generate-manifest", generateManifest)
+  .post("/api/items/:id/retry", retryItem)
   .get("/api/collections", listCollections)
   .post("/api/collections", createCollection)
   .get("/api/collections/:id", getCollection)
@@ -36,6 +39,27 @@ const router = new Router()
   .get("/healthz", () => new Response("ok", { status: 200 }));
 
 export default {
+  /**
+   * Cloudflare Queues consumer. Each message corresponds to one item that
+   * needs cached-mode ingestion. We process them one at a time and let the
+   * queue retry policy handle backoff; messages that throw stay in-flight
+   * for the configured max attempts before landing in the DLQ.
+   */
+  async queue(batch: MessageBatch<unknown>, env: Env, _ctx: ExecutionContext): Promise<void> {
+    for (const msg of batch.messages) {
+      try {
+        const body = msg.body as IngestMessage;
+        if (body && body.type === "ingest_cached") {
+          await processIngestJob(env, body.itemId);
+        }
+        msg.ack();
+      } catch (err) {
+        console.error("[ingest] job failed", err);
+        msg.retry();
+      }
+    }
+  },
+
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const preflight = handlePreflight(req, env);
     if (preflight) return preflight;

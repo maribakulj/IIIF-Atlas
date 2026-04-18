@@ -5,6 +5,8 @@
 
 export type IngestionMode = "reference" | "cached" | "iiif_reuse";
 
+export type ItemStatus = "processing" | "ready" | "failed";
+
 export interface CapturePayload {
   /** The URL of the page where the image was discovered. ALWAYS required. */
   pageUrl: string;
@@ -49,6 +51,13 @@ export interface Item {
 
   manifestSlug: string | null;
   manifestUrl: string | null;
+
+  /** Lifecycle: cached items are 'processing' until the queue worker is done. */
+  status: ItemStatus;
+  /** Populated when status === 'failed'; reset on retry. */
+  errorMessage: string | null;
+  /** SHA-256 of the cached binary, if any (also acts as the assets PK). */
+  assetSha256: string | null;
 
   capturedAt: string;
   createdAt: string;

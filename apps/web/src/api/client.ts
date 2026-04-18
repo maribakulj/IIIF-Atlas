@@ -102,6 +102,7 @@ export const api = {
     request<GenerateManifestResponse>(`/api/items/${id}/generate-manifest`, {
       method: "POST",
     }),
+  retryItem: (id: string) => request<ItemResponse>(`/api/items/${id}/retry`, { method: "POST" }),
   createCapture: (body: CapturePayload) =>
     request<CreateCaptureResponse>("/api/captures", {
       method: "POST",

@@ -8,8 +8,9 @@ import { requireAuth, requireWriter } from "../auth.js";
 import { mapItem } from "../db.js";
 import type { ItemRow } from "../db.js";
 import type { Env } from "../env.js";
-import { badRequest, notFound } from "../errors.js";
+import { badRequest, notFound, unprocessable } from "../errors.js";
 import { buildManifestForItem } from "../iiif-builder.js";
+import { enqueueIngest } from "../queue.js";
 
 export async function listItems(req: Request, env: Env): Promise<Response> {
   const auth = await requireAuth(req, env);
@@ -161,4 +162,45 @@ export async function generateManifest(
     manifestUrl: updated.manifestUrl!,
   };
   return Response.json(payload);
+}
+
+/**
+ * Re-enqueue a failed cached-mode item for ingestion. Only mutates the
+ * lifecycle fields (status, error_message) — the source URLs are
+ * immutable, so there's nothing else to change.
+ */
+export async function retryItem(
+  req: Request,
+  env: Env,
+  _ctx: ExecutionContext,
+  params: Record<string, string>,
+): Promise<Response> {
+  const auth = await requireAuth(req, env);
+  requireWriter(auth);
+  const row = await env.DB.prepare(
+    `SELECT * FROM items WHERE (id = ? OR slug = ?) AND workspace_id = ?`,
+  )
+    .bind(params.id, params.id, auth.workspaceId)
+    .first<ItemRow>();
+  if (!row) throw notFound();
+  if (row.mode !== "cached") {
+    throw unprocessable("Only cached items can be retried");
+  }
+  if (row.status === "processing") {
+    throw unprocessable("Item is already being processed");
+  }
+
+  await env.DB.prepare(
+    `UPDATE items SET status = 'processing', error_message = NULL,
+                       updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+       WHERE id = ?`,
+  )
+    .bind(row.id)
+    .run();
+  await enqueueIngest(env, row.id);
+
+  const refreshed = await env.DB.prepare(`SELECT * FROM items WHERE id = ?`)
+    .bind(row.id)
+    .first<ItemRow>();
+  return Response.json({ item: mapItem(refreshed!, env.PUBLIC_BASE_URL) });
 }

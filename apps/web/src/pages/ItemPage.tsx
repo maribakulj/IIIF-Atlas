@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 import { api } from "../api/client.js";
 import { MiradorViewer } from "../components/MiradorViewer.js";
 import { ModeBadge } from "../components/ModeBadge.js";
+import { StatusBadge } from "../components/StatusBadge.js";
 
 export function ItemPage() {
   const { id } = useParams<{ id: string }>();
@@ -60,6 +61,19 @@ export function ItemPage() {
     }
   }
 
+  async function retry() {
+    if (!item) return;
+    setSaving(true);
+    try {
+      const res = await api.retryItem(item.id);
+      setItem(res.item);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) return <p>Loading…</p>;
   if (error) return <div className="alert error">{error}</div>;
   if (!item) return <p>Not found.</p>;
@@ -69,9 +83,23 @@ export function ItemPage() {
       <header className="page-header">
         <h1>{item.title ?? item.sourcePageTitle ?? item.slug}</h1>
         <div className="row-between">
-          <ModeBadge mode={item.mode} />
+          <span className="row" style={{ gap: 6 }}>
+            <ModeBadge mode={item.mode} />
+            <StatusBadge status={item.status} />
+          </span>
           <small className="muted">Captured {new Date(item.capturedAt).toLocaleString()}</small>
         </div>
+        {item.status === "failed" && (
+          <div className="alert error">
+            <strong>Ingestion failed.</strong> {item.errorMessage ?? "Unknown error."}{" "}
+            <button className="btn btn-xs" onClick={retry} disabled={saving}>
+              Retry
+            </button>
+          </div>
+        )}
+        {item.status === "processing" && (
+          <div className="alert">Processing… reload in a moment.</div>
+        )}
       </header>
 
       <div className="split">
