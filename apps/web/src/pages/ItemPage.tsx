@@ -170,6 +170,14 @@ export function ItemPage() {
                 "—"
               )}
             </dd>
+            {item.regionXywh && (
+              <>
+                <dt>Region (xywh)</dt>
+                <dd>
+                  <code>{item.regionXywh}</code>
+                </dd>
+              </>
+            )}
           </dl>
         </div>
       </div>

@@ -56,6 +56,48 @@ export function detectFromDocument(doc: Document): DetectResult {
     if (rel === "image_src") push(href);
   }
 
+  // 1a) Common IIIF viewer integrations: Mirador/UV/OSD often expose the
+  // manifest URL as a data attribute on a container or a meta tag. These
+  // are cheap to check and cover the bulk of institutional embeds.
+  const dataSelectors = [
+    "[data-iiif-manifest]",
+    "[data-iiif-manifest-id]",
+    "[data-manifest]",
+    "[data-iiif]",
+  ];
+  for (const sel of dataSelectors) {
+    const el = doc.querySelector<HTMLElement>(sel);
+    if (!el) continue;
+    const attr =
+      el.getAttribute("data-iiif-manifest") ??
+      el.getAttribute("data-iiif-manifest-id") ??
+      el.getAttribute("data-manifest") ??
+      el.getAttribute("data-iiif");
+    if (attr) {
+      try {
+        const abs = new URL(attr, doc.baseURI).toString();
+        if (looksLikeInfoJson(abs)) result.infoJsonUrl ??= abs;
+        else result.manifestUrl ??= abs;
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  // 1b) Open Graph / meta fallbacks explicitly for IIIF.
+  const metaManifest = doc.querySelector<HTMLMetaElement>(
+    'meta[name="iiif:manifest"], meta[property="iiif:manifest"], meta[name="iiif-manifest"]',
+  )?.content;
+  if (metaManifest) {
+    try {
+      const abs = new URL(metaManifest, doc.baseURI).toString();
+      if (looksLikeInfoJson(abs)) result.infoJsonUrl ??= abs;
+      else result.manifestUrl ??= abs;
+    } catch {
+      /* ignore */
+    }
+  }
+
   // 2) Scripts with IIIF contexts inlined
   if (!result.manifestUrl) {
     const scripts = doc.querySelectorAll<HTMLScriptElement>(

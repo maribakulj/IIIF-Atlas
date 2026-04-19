@@ -20,6 +20,8 @@ export interface CapturePayload {
   infoJsonUrl?: string;
   /** Requested ingestion mode. Server may reject/adjust. */
   mode: IngestionMode;
+  /** Optional region of interest in intrinsic image pixels, "x,y,w,h". */
+  regionXywh?: string;
   /** Freeform user metadata (label, description, tags, rights, ...). */
   metadata?: Record<string, unknown>;
   /** Client timestamp when the capture was made (ISO 8601). */
@@ -58,6 +60,8 @@ export interface Item {
   errorMessage: string | null;
   /** SHA-256 of the cached binary, if any (also acts as the assets PK). */
   assetSha256: string | null;
+  /** Region of interest in intrinsic image pixels, as "x,y,w,h". */
+  regionXywh: string | null;
 
   capturedAt: string;
   createdAt: string;

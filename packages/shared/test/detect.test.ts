@@ -54,6 +54,30 @@ describe("detectFromDocument", () => {
     expect(res.manifestUrl).toBe("https://iiif.example/inline-manifest.json");
   });
 
+  it("detects a data-iiif-manifest attribute on a viewer container", () => {
+    const doc = makeDocument(
+      `<body><div id="viewer" data-iiif-manifest="https://iiif.example/m/42.json"></div></body>`,
+    );
+    const res = detectFromDocument(doc);
+    expect(res.manifestUrl).toBe("https://iiif.example/m/42.json");
+  });
+
+  it("detects data-manifest as a fallback", () => {
+    const doc = makeDocument(
+      `<body><div data-manifest="https://iiif.example/m/fallback.json"></div></body>`,
+    );
+    const res = detectFromDocument(doc);
+    expect(res.manifestUrl).toBe("https://iiif.example/m/fallback.json");
+  });
+
+  it('detects a <meta name="iiif-manifest"> tag', () => {
+    const doc = makeDocument(
+      `<head><meta name="iiif-manifest" content="https://iiif.example/m/meta.json"></head><body></body>`,
+    );
+    const res = detectFromDocument(doc);
+    expect(res.manifestUrl).toBe("https://iiif.example/m/meta.json");
+  });
+
   it("de-duplicates image candidates", () => {
     const doc = makeDocument(
       `<head>

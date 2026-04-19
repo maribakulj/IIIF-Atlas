@@ -68,6 +68,11 @@ export async function createCapture(req: Request, env: Env): Promise<Response> {
     throw badRequest("cached mode requires imageUrl");
   }
 
+  const regionXywh =
+    typeof body.regionXywh === "string" && /^\d+,\d+,\d+,\d+$/.test(body.regionXywh)
+      ? body.regionXywh
+      : null;
+
   const metadataJson = body.metadata ? JSON.stringify(body.metadata) : null;
   const description = (body.metadata?.description as string | undefined) ?? null;
   // Cached items are 'processing' until the queue worker is done; the
@@ -81,8 +86,8 @@ export async function createCapture(req: Request, env: Env): Promise<Response> {
         source_page_url, source_page_title, source_image_url, source_manifest_url,
         manifest_slug,
         captured_at, metadata_json,
-        workspace_id, status
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        workspace_id, status, region_xywh
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     ).bind(
       itemId,
       slug,
@@ -98,6 +103,7 @@ export async function createCapture(req: Request, env: Env): Promise<Response> {
       metadataJson,
       auth.workspaceId,
       status,
+      regionXywh,
     ),
     env.DB.prepare(
       `INSERT INTO captures (id, payload_json, resulting_item_id, workspace_id) VALUES (?,?,?,?)`,

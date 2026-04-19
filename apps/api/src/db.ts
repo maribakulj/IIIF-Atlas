@@ -10,6 +10,7 @@ export interface ItemRow {
   status: ItemStatus;
   error_message: string | null;
   asset_sha256: string | null;
+  region_xywh: string | null;
   source_page_url: string | null;
   source_page_title: string | null;
   source_image_url: string | null;
@@ -58,6 +59,7 @@ export function mapItem(row: ItemRow, publicBaseUrl: string): Item {
     status: row.status,
     errorMessage: row.error_message,
     assetSha256: row.asset_sha256,
+    regionXywh: row.region_xywh,
     capturedAt: row.captured_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

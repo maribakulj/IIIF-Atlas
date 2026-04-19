@@ -68,6 +68,29 @@ iiif-atlas/
 - `source_manifest_url` is preserved in item metadata when `iiif_reuse` is used.
 - Captures are stored raw in the `captures` table alongside the resulting item for audit.
 
+## Advanced capture (Sprint 4)
+
+- **Region of interest**. Right-click any image → *Clip region of this
+  image…*, or use the popup's *Clip region…* button. The content script
+  drops a full-viewport overlay the user can drag a rectangle on.
+  Coordinates are converted from CSS pixels to the image's intrinsic
+  pixels (`naturalWidth/Height`) and shipped as an `xywh` fragment
+  (`"x,y,w,h"`) on the capture. The manifest builder emits a
+  non-painting `highlighting` `AnnotationPage` targeting
+  `canvas#xywh=…` so viewers like Mirador render a box overlay.
+- **Enriched IIIF detection**. Beyond the existing `<link rel="iiif…">`
+  / JSON-LD `@context` sniffing, the detector now also picks up
+  `[data-iiif-manifest]`, `[data-iiif-manifest-id]`, `[data-manifest]`,
+  `[data-iiif]` attributes, and `<meta name="iiif-manifest">` tags
+  commonly used by Mirador/UV/OpenSeadragon embeds.
+- **Keyboard shortcut**. `Ctrl+Shift+L` (⌘+Shift+L on macOS) runs the
+  "capture the primary image of this page" action. Rebind in
+  `chrome://extensions/shortcuts`.
+- **Per-domain ingestion presets**. The Options page accepts a JSON
+  map of `hostname → mode` (reference / cached / iiif_reuse). Hostnames
+  inherit from their parent — a preset on `example.org` applies to
+  `sub.example.org`.
+
 ## IIIF Image API (Sprint 3)
 
 Every cached asset is served through a real IIIF Image API 3 service —

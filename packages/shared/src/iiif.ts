@@ -40,6 +40,8 @@ export interface IIIFCanvas {
   height: number;
   width: number;
   items: IIIFAnnotationPage[];
+  /** Non-painting annotations (highlights, comments, …). */
+  annotations?: IIIFAnnotationPage[];
 }
 
 export interface IIIFAnnotationPage {
@@ -51,9 +53,9 @@ export interface IIIFAnnotationPage {
 export interface IIIFAnnotation {
   id: string;
   type: "Annotation";
-  motivation: "painting";
+  motivation: "painting" | "highlighting" | "tagging" | "commenting";
   target: string;
-  body: IIIFImageBody;
+  body?: IIIFImageBody | { type: string; value?: string };
 }
 
 export interface IIIFImageBody {
@@ -174,6 +176,12 @@ export function buildItemManifest(params: BuildManifestParams): IIIFManifest {
     label: label("Ingestion mode"),
     value: label(item.mode),
   });
+  if (item.regionXywh) {
+    metadata.push({
+      label: label("Region of interest"),
+      value: label(item.regionXywh),
+    });
+  }
 
   const manifest: IIIFManifest = {
     "@context": IIIF_CONTEXT,
@@ -222,6 +230,27 @@ export function buildItemManifest(params: BuildManifestParams): IIIFManifest {
             ],
           },
         ],
+        // Surface a region-of-interest as a non-painting highlighting
+        // annotation; viewers like Mirador render a box overlay, and
+        // the fragment target makes the xywh machine-readable.
+        ...(item.regionXywh
+          ? {
+              annotations: [
+                {
+                  id: `${canvasId}/annotations`,
+                  type: "AnnotationPage" as const,
+                  items: [
+                    {
+                      id: `${canvasId}/annotations/region`,
+                      type: "Annotation" as const,
+                      motivation: "highlighting" as const,
+                      target: `${canvasId}#xywh=${item.regionXywh}`,
+                    },
+                  ],
+                },
+              ],
+            }
+          : {}),
       },
     ],
   };
