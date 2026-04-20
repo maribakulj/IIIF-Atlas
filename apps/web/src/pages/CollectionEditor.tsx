@@ -1,4 +1,4 @@
-import type { Collection, Item } from "@iiif-atlas/shared";
+import type { Collection, Item, ShareTokenSummary, ShareTokenWithSecret } from "@iiif-atlas/shared";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client.js";
@@ -17,6 +17,8 @@ export function CollectionEditor() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shares, setShares] = useState<ShareTokenSummary[]>([]);
+  const [justCreatedShare, setJustCreatedShare] = useState<ShareTokenWithSecret | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -31,6 +33,15 @@ export function CollectionEditor() {
           setDescription(col.collection.description ?? "");
           setIsPublic(col.collection.isPublic);
           setSelected((col.collection.items ?? []).map((i) => i.id));
+          // Load any existing share tokens for this collection.
+          api
+            .listShares({ resourceType: "collection", resourceId: col.collection.id })
+            .then((r) => {
+              if (active) setShares(r.shares);
+            })
+            .catch(() => {
+              /* non-fatal */
+            });
         }
       })
       .catch((err) => active && setError(String(err)))
@@ -77,6 +88,40 @@ export function CollectionEditor() {
     setSelected((prev) =>
       prev.includes(itemId) ? prev.filter((x) => x !== itemId) : [...prev, itemId],
     );
+  }
+
+  async function mintShare() {
+    if (!collection) return;
+    try {
+      const res = await api.createShare({
+        resourceType: "collection",
+        resourceId: collection.id,
+        role: "viewer",
+      });
+      setJustCreatedShare(res.share);
+      const listed = await api.listShares({
+        resourceType: "collection",
+        resourceId: collection.id,
+      });
+      setShares(listed.shares);
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
+  async function revokeShare(id: string) {
+    try {
+      await api.revokeShare(id);
+      setShares((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, revokedAt: new Date().toISOString() } : s)),
+      );
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
+  function shareUrlFor(secret: string): string {
+    return `${window.location.origin}/shared/c/${secret}`;
   }
 
   function move(itemId: string, dir: -1 | 1) {
@@ -132,6 +177,76 @@ export function CollectionEditor() {
           </button>
         </div>
       </div>
+
+      {collection && (
+        <div className="card">
+          <h3>Share links</h3>
+          <p className="muted">
+            Viewer tokens open a read-only page on your web app — no sign-up required. Only
+            workspace members see them here.
+          </p>
+          {justCreatedShare && (
+            <div className="alert ok">
+              <p>
+                <strong>New share token (shown once):</strong>
+              </p>
+              <code style={{ wordBreak: "break-all" }}>{shareUrlFor(justCreatedShare.secret)}</code>
+              <div className="row">
+                <button
+                  type="button"
+                  className="btn btn-xs"
+                  onClick={() => {
+                    navigator.clipboard
+                      ?.writeText(shareUrlFor(justCreatedShare.secret))
+                      .catch(() => {
+                        /* noop */
+                      });
+                  }}
+                >
+                  Copy URL
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-xs btn-ghost"
+                  onClick={() => setJustCreatedShare(null)}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          )}
+          {shares.length > 0 && (
+            <ul className="list">
+              {shares.map((s) => (
+                <li key={s.id}>
+                  <code>{s.prefix}…</code>
+                  <span className="muted"> · {s.role}</span>
+                  {s.revokedAt ? (
+                    <span className="muted"> · revoked</span>
+                  ) : (
+                    <>
+                      <span className="muted"> · {new Date(s.createdAt).toLocaleDateString()}</span>
+                      <button
+                        type="button"
+                        className="btn btn-xs btn-ghost"
+                        style={{ marginLeft: 8 }}
+                        onClick={() => revokeShare(s.id)}
+                      >
+                        Revoke
+                      </button>
+                    </>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="row">
+            <button type="button" className="btn" onClick={mintShare}>
+              Create viewer share link
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="split">
         <div className="card">

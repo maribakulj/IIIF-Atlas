@@ -68,10 +68,180 @@ iiif-atlas/
 - `source_manifest_url` is preserved in item metadata when `iiif_reuse` is used.
 - Captures are stored raw in the `captures` table alongside the resulting item for audit.
 
+## Annotations & share links (Sprint 6)
+
+- **Annotations** are IIIF Web Annotations stored one-per-row.
+  Workspace members create / edit / delete via
+  `POST|PATCH|DELETE /api/items/:id/annotations[/:aid]`.
+  Each annotation carries a motivation (`commenting` / `tagging` /
+  `highlighting` / `describing`), an optional `target_xywh` region,
+  and a free-text body.
+- **Public AnnotationPage**: `GET /iiif/items/:slug/annotations`
+  serves a IIIF `AnnotationPage` — unauthenticated, same discovery
+  model as the public manifests. The manifest builder now references
+  this page from `canvas.annotations[]`, so Mirador loads comments
+  automatically.
+- **Share tokens**. Workspace members mint pseudonymous, scoped,
+  revocable URLs for a single collection or item:
+  - `POST /api/shares {resourceType, resourceId, role}`
+  - `GET /api/shares` (list workspace tokens)
+  - `DELETE /api/shares/:id` (revoke)
+  - `GET /api/shares/:token` — **public** — resolves the token into
+    a read-only snapshot of the resource.
+  - Tokens are `iia_share_` + 32 crockford chars; only the SHA-256
+    hex digest is stored at rest. Expired/revoked tokens return 404
+    rather than 410 (we don't confirm prior existence).
+- **Web**: ItemPage exposes an Annotations section (list + add with
+  optional xywh). CollectionEditor has a Share-links panel (mint,
+  list, revoke) with one-shot secret display. Unauthenticated
+  `/shared/c/:token` page resolves the share and renders the
+  collection + items read-only.
+
+## Search, tags & exports (Sprint 5)
+
+- **Full-text search**. `GET /api/items?q=…` now runs against a D1 FTS5
+  virtual table kept in sync via triggers (`apps/api/migrations/
+  0005_fts_tags.sql`). Queries are tokenised with the Porter stemmer
+  and each term gets a prefix match (`term*`), so as-you-type search
+  "just works". FTS5 reserved characters (`" ( ) * :`) are stripped
+  from user input.
+- **Tags**. Per-workspace, auto-created by slug. Attach with
+  `POST /api/items/:id/tags {name}`, detach with
+  `DELETE /api/items/:id/tags/:slug`, enumerate via `GET /api/tags`
+  (with item counts). Items carry their tag slugs on every list/get
+  response.
+- **Facets**. Pass `?facets=1` to `GET /api/items` for post-filter
+  counts on `mode`, `tag`, and `sourceHost` (a heuristic host
+  extraction from `source_page_url`).
+- **Sorting**. `?sort=captured_at_desc|captured_at_asc|title_asc`.
+- **Rights**. `items.rights` stores a URL (e.g. a Creative Commons
+  deed) or an identifier; exposed on every item, settable via PATCH.
+- **Export**. `GET /api/export/items?format=json|csv|ris` streams the
+  current workspace (honouring the same q/tag/mode/rights filters) in
+  one of three shapes. The RIS variant uses `TY - ART` so Zotero
+  imports each capture as an "Artwork" record.
+
+## Advanced capture (Sprint 4)
+
+- **Region of interest**. Right-click any image → *Clip region of this
+  image…*, or use the popup's *Clip region…* button. The content script
+  drops a full-viewport overlay the user can drag a rectangle on.
+  Coordinates are converted from CSS pixels to the image's intrinsic
+  pixels (`naturalWidth/Height`) and shipped as an `xywh` fragment
+  (`"x,y,w,h"`) on the capture. The manifest builder emits a
+  non-painting `highlighting` `AnnotationPage` targeting
+  `canvas#xywh=…` so viewers like Mirador render a box overlay.
+- **Enriched IIIF detection**. Beyond the existing `<link rel="iiif…">`
+  / JSON-LD `@context` sniffing, the detector now also picks up
+  `[data-iiif-manifest]`, `[data-iiif-manifest-id]`, `[data-manifest]`,
+  `[data-iiif]` attributes, and `<meta name="iiif-manifest">` tags
+  commonly used by Mirador/UV/OpenSeadragon embeds.
+- **Keyboard shortcut**. `Ctrl+Shift+L` (⌘+Shift+L on macOS) runs the
+  "capture the primary image of this page" action. Rebind in
+  `chrome://extensions/shortcuts`.
+- **Per-domain ingestion presets**. The Options page accepts a JSON
+  map of `hostname → mode` (reference / cached / iiif_reuse). Hostnames
+  inherit from their parent — a preset on `example.org` applies to
+  `sub.example.org`.
+
+## IIIF Image API (Sprint 3)
+
+Every cached asset is served through a real IIIF Image API 3 service —
+not just as a raw blob. This means viewers (Mirador, Universal Viewer)
+discover an `info.json` and treat the image as first-class IIIF content.
+
+| Endpoint                                                                | Behaviour                          |
+|-------------------------------------------------------------------------|------------------------------------|
+| `GET /iiif/image/<sha256>/info.json`                                    | Level-0 info.json with width/height|
+| `GET /iiif/image/<sha256>/full/max/0/default.<native-ext>`              | Streams the asset from R2          |
+| Anything else (region / size / rotation / format conversion)            | `501 Not Implemented` (level 0)    |
+
+The asset's `sha256` is the content-addressed identifier we already
+mint at ingestion time, so URLs are inherently immutable.
+
+Manifests for `mode = 'cached'` items now embed an `ImageService3`
+reference on the canvas annotation body, with `id =
+{publicBaseUrl}/iiif/image/{sha256}` and `profile = level0`. Forward
+upgrades to level 1+ (with tiles) become invisible to clients —
+they just keep working better.
+
+For `mode = 'iiif_reuse'` items we forward the upstream manifest's
+canvases and services unchanged (only rewriting the manifest's `id` to
+our public URL).
+
+## Ingestion pipeline (Sprint 2)
+
+Cached-mode captures are processed asynchronously via Cloudflare Queues
+(or inline when no `INGEST_QUEUE` binding is configured — for tests /
+single-instance dev).
+
+Lifecycle:
+
+1. `POST /api/captures` (mode=`cached`) creates the item with
+   `status='processing'` and enqueues an `ingest_cached` job.
+2. The queue consumer (`queue()` export) downloads via `safeFetch`
+   (SSRF + size + MIME guards), computes SHA-256, and:
+   - **dedupes** against the `assets` table — a bytewise duplicate already
+     in R2 is reused without re-storing.
+   - **probes dimensions** via the magic-bytes parser
+     (`apps/api/src/image-probe.ts`, supports PNG / JPEG / GIF / WebP) and
+     persists `(sha256, mime, byte_size, width, height, r2_key)`.
+   - flips the item to `status='ready'` with the resolved `r2Key`,
+     `assetSha256`, dimensions, etc.
+3. Failures land as `status='failed'` with an `errorMessage`. The web app
+   shows a retry button; `POST /api/items/:id/retry` re-enqueues.
+
+Response codes:
+
+- `201` when ingestion ran inline (sync path: no queue binding).
+- `202` when handed off to the queue (async path).
+
+Either way the response carries the freshly-inserted item, and the
+client can poll `GET /api/items/:id` until `status === 'ready'`.
+
+## Auth (Sprint 1)
+
+- **API keys** (Bearer tokens) authenticate every mutation and every
+  workspace-scoped read. Format: `iia_` + 32 crockford chars; only the
+  SHA-256 hex digest is stored at rest.
+- **Workspaces** isolate data: every item / collection / capture carries a
+  `workspace_id`. Cross-workspace reads return 404, never 200, even when
+  hitting an item by direct ID.
+- **Roles**: `owner`, `editor`, `viewer`. Viewers can read; owners and
+  editors mutate. (Bypassable for the workspace's owner since they own the
+  default key on signup.)
+- **Bootstrap**: with `ALLOW_DEV_SIGNUP=true` (set in `wrangler.toml` for
+  local + staging, off in production), `POST /api/auth/dev-signup` creates
+  a user + a workspace + a first API key in one call. The web app's sign-in
+  screen calls this in dev. In production, mint keys via `wrangler d1
+  execute` or expose your own SSO flow.
+- **Public IIIF endpoints stay public**: `GET /iiif/manifests/:slug` and
+  `GET /iiif/collections/:slug` (when `is_public = 1`) are reachable
+  without a key — the whole point of publishing.
+
+Routes summary:
+
+| Endpoint                                      | Auth      | Notes                  |
+|-----------------------------------------------|-----------|------------------------|
+| `POST /api/auth/dev-signup`                   | none      | gated by env flag      |
+| `GET  /api/auth/me`                           | required  | identity + workspaces  |
+| `GET/POST /api/auth/api-keys`                 | required  | list, mint             |
+| `DELETE /api/auth/api-keys/:id`               | required  | revoke                 |
+| `POST /api/captures`                          | writer    | workspace-scoped       |
+| `GET/PATCH /api/items[/:id]`                  | writer*   | workspace-scoped       |
+| `POST /api/items/:id/generate-manifest`       | writer    | workspace-scoped       |
+| `GET/POST/PATCH /api/collections[/:id]`       | writer*   | workspace-scoped       |
+| `GET /iiif/manifests/:slug`                   | none      | public                 |
+| `GET /iiif/collections/:slug`                 | none      | only if `is_public`    |
+| `GET /r2/<key>`                               | none      | public passthrough     |
+
+`writer*`: GET only requires authentication; PATCH/POST require non-viewer.
+
 ## Security
 
-- SSRF guard blocks loopback, link-local, private, CGNAT, multicast, and IPv6 private ranges,
-  plus disallowed schemes and URL userinfo (`apps/api/src/ssrf.ts`).
+- SSRF guard blocks loopback, link-local, private, CGNAT, multicast, and IPv6 private ranges
+  (including IPv4-mapped IPv6 in normalized hex form), plus disallowed schemes and URL
+  userinfo (`apps/api/src/ssrf.ts`).
 - `safeFetch` enforces a per-request byte cap (`MAX_DOWNLOAD_BYTES`, default 25 MiB),
   an `AbortController` timeout (`FETCH_TIMEOUT_MS`, default 15 s), and a MIME allow-list
   (`ALLOWED_MIME_TYPES`).

@@ -12,6 +12,7 @@ ALLOWED_ORIGINS = "http://localhost:5173,chrome-extension://*,moz-extension://*"
 MAX_DOWNLOAD_BYTES = "26214400"    # 25 MiB
 FETCH_TIMEOUT_MS = "15000"
 ALLOWED_MIME_TYPES = "image/jpeg,image/png,image/webp,image/gif,image/tiff,image/avif,image/svg+xml"
+ALLOW_DEV_SIGNUP = "true"
 
 [[d1_databases]]
 binding = "DB"
@@ -24,6 +25,21 @@ binding = "BUCKET"
 bucket_name = "iiif-atlas-media"
 preview_bucket_name = "iiif-atlas-media-preview"
 
+# Cloudflare Queue for cached-image ingestion. Comment out the producer +
+# consumer if you don't have Queues enabled — the API will fall back to
+# inline execution (good enough for single-instance dev, but blocks the
+# request on download/probe/R2-put work).
+# [[queues.producers]]
+# binding = "INGEST_QUEUE"
+# queue = "iiif-atlas-ingest"
+#
+# [[queues.consumers]]
+# queue = "iiif-atlas-ingest"
+# max_batch_size = 10
+# max_batch_timeout = 5
+# max_retries = 5
+# dead_letter_queue = "iiif-atlas-ingest-dlq"
+
 # Production overrides
 [env.production.vars]
 PUBLIC_BASE_URL = "https://api.iiif-atlas.example.com"
@@ -31,6 +47,7 @@ ALLOWED_ORIGINS = "https://iiif-atlas.example.com,chrome-extension://*,moz-exten
 MAX_DOWNLOAD_BYTES = "52428800"
 FETCH_TIMEOUT_MS = "20000"
 ALLOWED_MIME_TYPES = "image/jpeg,image/png,image/webp,image/gif,image/tiff,image/avif,image/svg+xml"
+ALLOW_DEV_SIGNUP = "false"
 
 [[env.production.d1_databases]]
 binding = "DB"

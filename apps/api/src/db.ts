@@ -1,4 +1,4 @@
-import type { Collection, IngestionMode, Item } from "@iiif-atlas/shared";
+import type { Collection, IngestionMode, Item, ItemStatus } from "@iiif-atlas/shared";
 
 /** D1 row shapes. */
 export interface ItemRow {
@@ -7,6 +7,13 @@ export interface ItemRow {
   title: string | null;
   description: string | null;
   mode: IngestionMode;
+  status: ItemStatus;
+  error_message: string | null;
+  asset_sha256: string | null;
+  region_xywh: string | null;
+  rights: string | null;
+  /** Comma-separated tag slugs, populated by list/get queries via GROUP_CONCAT. */
+  tag_slugs?: string | null;
   source_page_url: string | null;
   source_page_title: string | null;
   source_image_url: string | null;
@@ -52,6 +59,12 @@ export function mapItem(row: ItemRow, publicBaseUrl: string): Item {
     byteSize: row.byte_size,
     manifestSlug: row.manifest_slug,
     manifestUrl: row.manifest_slug ? `${publicBaseUrl}/iiif/manifests/${row.manifest_slug}` : null,
+    status: row.status,
+    errorMessage: row.error_message,
+    assetSha256: row.asset_sha256,
+    regionXywh: row.region_xywh,
+    rights: row.rights,
+    tags: row.tag_slugs ? row.tag_slugs.split(",").filter(Boolean) : [],
     capturedAt: row.captured_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

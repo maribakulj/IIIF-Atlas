@@ -36,6 +36,46 @@ function Popup() {
     setSelected((prev) => (prev.includes(url) ? prev.filter((x) => x !== url) : [...prev, url]));
   }
 
+  async function clipRegion() {
+    if (!tab?.id) return;
+    const imageUrl = selected[0] ?? detect?.primaryImageUrl;
+    if (!imageUrl) {
+      setError("Pick an image first, then clip a region from it.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setOk(null);
+    try {
+      // Close the popup so the overlay is usable; the background will
+      // take care of the rest.
+      const sel = (await chrome.tabs.sendMessage(tab.id, {
+        type: "iiif-atlas:start-region-select",
+        imageUrl,
+      })) as { imageUrl: string; regionXywh: string } | null;
+      if (!sel) {
+        setError("Region selection cancelled.");
+        return;
+      }
+      const payload: CapturePayload = {
+        pageUrl: tab.url ?? "",
+        pageTitle: tab.title ?? detect?.pageTitle,
+        imageUrl: sel.imageUrl,
+        manifestUrl: detect?.manifestUrl,
+        infoJsonUrl: detect?.infoJsonUrl,
+        mode,
+        regionXywh: sel.regionXywh,
+        capturedAt: new Date().toISOString(),
+      };
+      await postCapture(payload);
+      setOk(`Region ${sel.regionXywh} added`);
+    } catch (err) {
+      setError(String((err as Error).message ?? err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function addSelected() {
     if (!tab) return;
     setBusy(true);
@@ -128,6 +168,11 @@ function Popup() {
         <button disabled={busy} onClick={addSelected}>
           {busy ? "Adding…" : "Add to library"}
         </button>
+        {mode !== "iiif_reuse" && (
+          <button className="ghost" disabled={busy} onClick={clipRegion}>
+            Clip region…
+          </button>
+        )}
         <button className="ghost" onClick={() => chrome.runtime.openOptionsPage()}>
           Options
         </button>

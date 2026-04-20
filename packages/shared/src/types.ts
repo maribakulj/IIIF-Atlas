@@ -5,6 +5,8 @@
 
 export type IngestionMode = "reference" | "cached" | "iiif_reuse";
 
+export type ItemStatus = "processing" | "ready" | "failed";
+
 export interface CapturePayload {
   /** The URL of the page where the image was discovered. ALWAYS required. */
   pageUrl: string;
@@ -18,6 +20,8 @@ export interface CapturePayload {
   infoJsonUrl?: string;
   /** Requested ingestion mode. Server may reject/adjust. */
   mode: IngestionMode;
+  /** Optional region of interest in intrinsic image pixels, "x,y,w,h". */
+  regionXywh?: string;
   /** Freeform user metadata (label, description, tags, rights, ...). */
   metadata?: Record<string, unknown>;
   /** Client timestamp when the capture was made (ISO 8601). */
@@ -50,6 +54,19 @@ export interface Item {
   manifestSlug: string | null;
   manifestUrl: string | null;
 
+  /** Lifecycle: cached items are 'processing' until the queue worker is done. */
+  status: ItemStatus;
+  /** Populated when status === 'failed'; reset on retry. */
+  errorMessage: string | null;
+  /** SHA-256 of the cached binary, if any (also acts as the assets PK). */
+  assetSha256: string | null;
+  /** Region of interest in intrinsic image pixels, as "x,y,w,h". */
+  regionXywh: string | null;
+  /** Rights statement or license (URL or SPDX-ish identifier). */
+  rights: string | null;
+  /** Tags attached to this item (slugs). */
+  tags: string[];
+
   capturedAt: string;
   createdAt: string;
   updatedAt: string;
@@ -74,6 +91,79 @@ export interface ItemPatch {
   description?: string | null;
   metadata?: Record<string, unknown> | null;
   mode?: IngestionMode;
+  rights?: string | null;
+}
+
+export interface Tag {
+  id: string;
+  name: string;
+  slug: string;
+  itemCount?: number;
+}
+
+export interface Facet {
+  value: string;
+  count: number;
+}
+
+export interface Facets {
+  mode: Facet[];
+  tag: Facet[];
+  sourceHost: Facet[];
+}
+
+export type ItemSort = "captured_at_desc" | "captured_at_asc" | "title_asc";
+
+export type AnnotationMotivation = "commenting" | "tagging" | "highlighting" | "describing";
+
+export interface Annotation {
+  id: string;
+  itemId: string;
+  motivation: AnnotationMotivation;
+  targetXywh: string | null;
+  bodyValue: string | null;
+  bodyFormat: string | null;
+  creatorUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnnotationCreate {
+  motivation?: AnnotationMotivation;
+  targetXywh?: string | null;
+  bodyValue?: string;
+  bodyFormat?: string;
+}
+
+export type AnnotationPatch = AnnotationCreate;
+
+export type ShareRole = "viewer" | "editor";
+export type ShareResourceType = "collection" | "item";
+
+export interface ShareTokenSummary {
+  id: string;
+  prefix: string;
+  resourceType: ShareResourceType;
+  resourceId: string;
+  role: ShareRole;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
+/** Returned at mint time only; the raw token never hits storage. */
+export interface ShareTokenWithSecret extends ShareTokenSummary {
+  secret: string;
+}
+
+export interface ShareResolveResponse {
+  resourceType: ShareResourceType;
+  resourceId: string;
+  role: ShareRole;
+  workspaceName: string;
+  /** Payload shape mirrors the authenticated GET response for the resource. */
+  collection?: Collection;
+  item?: Item;
 }
 
 export interface CollectionCreate {
@@ -81,6 +171,59 @@ export interface CollectionCreate {
   description?: string;
   isPublic?: boolean;
   itemIds?: string[];
+}
+
+export interface User {
+  id: string;
+  email: string;
+  displayName: string | null;
+  createdAt: string;
+}
+
+export interface Workspace {
+  id: string;
+  slug: string;
+  name: string;
+  ownerUserId: string;
+  createdAt: string;
+}
+
+export type WorkspaceRole = "owner" | "editor" | "viewer";
+
+export interface WorkspaceMembership {
+  workspace: Workspace;
+  role: WorkspaceRole;
+}
+
+export interface ApiKeySummary {
+  id: string;
+  name: string;
+  prefix: string;
+  workspaceId: string;
+  scopes: string[] | null;
+  lastUsedAt: string | null;
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+/** Returned only at creation time; never persisted in plaintext. */
+export interface ApiKeyWithSecret extends ApiKeySummary {
+  /** The raw token, e.g. `iia_…`. Show once, store nowhere. */
+  secret: string;
+}
+
+export interface DevSignupRequest {
+  email: string;
+  displayName?: string;
+  workspaceName?: string;
+}
+
+export interface AuthMe {
+  user: User;
+  memberships: WorkspaceMembership[];
+  /** Workspace the request was authenticated against (from the API key). */
+  activeWorkspace: Workspace | null;
+  role: WorkspaceRole | null;
 }
 
 export interface DetectResult {

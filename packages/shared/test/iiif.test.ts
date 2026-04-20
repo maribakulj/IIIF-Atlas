@@ -25,6 +25,10 @@ const baseItem: Item = {
   byteSize: null,
   manifestSlug: "test-item-abc123",
   manifestUrl: null,
+  status: "ready",
+  errorMessage: null,
+  assetSha256: null,
+  regionXywh: null,
   capturedAt: "2026-04-17T10:00:00.000Z",
   createdAt: "2026-04-17T10:00:00.000Z",
   updatedAt: "2026-04-17T10:00:00.000Z",
@@ -92,6 +96,24 @@ describe("buildItemManifest", () => {
     const body = m.items[0]?.items[0]?.items[0]?.body;
     expect(body?.service?.[0]?.id).toBe("https://iiif.example/iiif/2/abc");
     expect(body?.service?.[0]?.type).toBe("ImageService2");
+  });
+
+  it("emits a highlighting annotation when regionXywh is set", () => {
+    const m = buildItemManifest({
+      item: { ...baseItem, regionXywh: "100,50,200,300" },
+      publicBaseUrl: "https://api.iiif-atlas.test",
+      imageUrl: "https://example.com/big.jpg",
+      width: 2400,
+      height: 1600,
+    });
+    const canvas = m.items[0];
+    expect(canvas?.annotations?.[0]?.items?.[0]?.motivation).toBe("highlighting");
+    expect(canvas?.annotations?.[0]?.items?.[0]?.target).toBe(`${canvas?.id}#xywh=100,50,200,300`);
+    // Second page is the public AnnotationPage reference (no inline items).
+    expect(canvas?.annotations?.[1]?.id).toMatch(/\/iiif\/items\/[^/]+\/annotations$/);
+    expect(canvas?.annotations?.[1]?.items).toBeUndefined();
+    const metaLabels = m.metadata?.map((e) => e.label.none?.[0]);
+    expect(metaLabels).toContain("Region of interest");
   });
 
   it("falls back to slug as label when title is null", () => {

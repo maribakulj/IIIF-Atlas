@@ -40,20 +40,23 @@ export interface IIIFCanvas {
   height: number;
   width: number;
   items: IIIFAnnotationPage[];
+  /** Non-painting annotations (highlights, comments, …). */
+  annotations?: IIIFAnnotationPage[];
 }
 
 export interface IIIFAnnotationPage {
   id: string;
   type: "AnnotationPage";
-  items: IIIFAnnotation[];
+  /** Items MAY be omitted (reference-only page — client fetches by id). */
+  items?: IIIFAnnotation[];
 }
 
 export interface IIIFAnnotation {
   id: string;
   type: "Annotation";
-  motivation: "painting";
+  motivation: "painting" | "highlighting" | "tagging" | "commenting";
   target: string;
-  body: IIIFImageBody;
+  body?: IIIFImageBody | { type: string; value?: string };
 }
 
 export interface IIIFImageBody {
@@ -80,6 +83,22 @@ export interface IIIFCollection {
 }
 
 export const IIIF_CONTEXT = "http://iiif.io/api/presentation/3/context.json";
+export const IIIF_IMAGE_CONTEXT = "http://iiif.io/api/image/3/context.json";
+
+/** Image API 3 info.json shape (minimal — level 0 today). */
+export interface IIIFImageInfo3 {
+  "@context": string;
+  id: string;
+  type: "ImageService3";
+  protocol: "http://iiif.io/api/image";
+  profile: "level0" | "level1" | "level2";
+  width: number;
+  height: number;
+  /** Optional tile pyramid; absent at level 0. */
+  tiles?: Array<{ width: number; height?: number; scaleFactors: number[] }>;
+  /** Mime types the service can return. */
+  extraFormats?: string[];
+}
 
 export function label(value: string, lang = "none"): IIIFLabel {
   return { [lang]: [value] };
@@ -158,6 +177,12 @@ export function buildItemManifest(params: BuildManifestParams): IIIFManifest {
     label: label("Ingestion mode"),
     value: label(item.mode),
   });
+  if (item.regionXywh) {
+    metadata.push({
+      label: label("Region of interest"),
+      value: label(item.regionXywh),
+    });
+  }
 
   const manifest: IIIFManifest = {
     "@context": IIIF_CONTEXT,
@@ -204,6 +229,33 @@ export function buildItemManifest(params: BuildManifestParams): IIIFManifest {
                 body,
               },
             ],
+          },
+        ],
+        // Non-painting annotation pages on this canvas:
+        //  - an inline region highlighting (Sprint 4), when an xywh is set
+        //  - a reference to the public AnnotationPage at
+        //    /iiif/items/{slug}/annotations (Sprint 6) so viewers can
+        //    lazy-load comments/highlights without a re-fetch of the manifest
+        annotations: [
+          ...(item.regionXywh
+            ? [
+                {
+                  id: `${canvasId}/annotations`,
+                  type: "AnnotationPage" as const,
+                  items: [
+                    {
+                      id: `${canvasId}/annotations/region`,
+                      type: "Annotation" as const,
+                      motivation: "highlighting" as const,
+                      target: `${canvasId}#xywh=${item.regionXywh}`,
+                    },
+                  ],
+                },
+              ]
+            : []),
+          {
+            id: `${publicBaseUrl}/iiif/items/${item.manifestSlug ?? item.slug}/annotations`,
+            type: "AnnotationPage" as const,
           },
         ],
       },
