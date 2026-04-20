@@ -68,6 +68,35 @@ iiif-atlas/
 - `source_manifest_url` is preserved in item metadata when `iiif_reuse` is used.
 - Captures are stored raw in the `captures` table alongside the resulting item for audit.
 
+## Annotations & share links (Sprint 6)
+
+- **Annotations** are IIIF Web Annotations stored one-per-row.
+  Workspace members create / edit / delete via
+  `POST|PATCH|DELETE /api/items/:id/annotations[/:aid]`.
+  Each annotation carries a motivation (`commenting` / `tagging` /
+  `highlighting` / `describing`), an optional `target_xywh` region,
+  and a free-text body.
+- **Public AnnotationPage**: `GET /iiif/items/:slug/annotations`
+  serves a IIIF `AnnotationPage` — unauthenticated, same discovery
+  model as the public manifests. The manifest builder now references
+  this page from `canvas.annotations[]`, so Mirador loads comments
+  automatically.
+- **Share tokens**. Workspace members mint pseudonymous, scoped,
+  revocable URLs for a single collection or item:
+  - `POST /api/shares {resourceType, resourceId, role}`
+  - `GET /api/shares` (list workspace tokens)
+  - `DELETE /api/shares/:id` (revoke)
+  - `GET /api/shares/:token` — **public** — resolves the token into
+    a read-only snapshot of the resource.
+  - Tokens are `iia_share_` + 32 crockford chars; only the SHA-256
+    hex digest is stored at rest. Expired/revoked tokens return 404
+    rather than 410 (we don't confirm prior existence).
+- **Web**: ItemPage exposes an Annotations section (list + add with
+  optional xywh). CollectionEditor has a Share-links panel (mint,
+  list, revoke) with one-shot secret display. Unauthenticated
+  `/shared/c/:token` page resolves the share and renders the
+  collection + items read-only.
+
 ## Search, tags & exports (Sprint 5)
 
 - **Full-text search**. `GET /api/items?q=…` now runs against a D1 FTS5

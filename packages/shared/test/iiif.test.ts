@@ -107,8 +107,11 @@ describe("buildItemManifest", () => {
       height: 1600,
     });
     const canvas = m.items[0];
-    expect(canvas?.annotations?.[0]?.items[0]?.motivation).toBe("highlighting");
-    expect(canvas?.annotations?.[0]?.items[0]?.target).toBe(`${canvas?.id}#xywh=100,50,200,300`);
+    expect(canvas?.annotations?.[0]?.items?.[0]?.motivation).toBe("highlighting");
+    expect(canvas?.annotations?.[0]?.items?.[0]?.target).toBe(`${canvas?.id}#xywh=100,50,200,300`);
+    // Second page is the public AnnotationPage reference (no inline items).
+    expect(canvas?.annotations?.[1]?.id).toMatch(/\/iiif\/items\/[^/]+\/annotations$/);
+    expect(canvas?.annotations?.[1]?.items).toBeUndefined();
     const metaLabels = m.metadata?.map((e) => e.label.none?.[0]);
     expect(metaLabels).toContain("Region of interest");
   });

@@ -1,5 +1,8 @@
 import type {
   AddTagRequest,
+  AnnotationCreate,
+  AnnotationPatch,
+  AnnotationResponse,
   CapturePayload,
   Collection,
   CollectionCreate,
@@ -7,6 +10,8 @@ import type {
   CreateApiKeyRequest,
   CreateApiKeyResponse,
   CreateCaptureResponse,
+  CreateShareRequest,
+  CreateShareResponse,
   DevSignupRequest,
   DevSignupResponse,
   GenerateManifestResponse,
@@ -14,11 +19,14 @@ import type {
   ItemPatch,
   ItemResponse,
   ItemSort,
+  ListAnnotationsResponse,
   ListApiKeysResponse,
   ListCollectionsResponse,
   ListItemsResponse,
+  ListSharesResponse,
   ListTagsResponse,
   MeResponse,
+  ShareResolveResponse,
   Tag,
 } from "@iiif-atlas/shared";
 import { getApiKey, setApiKey } from "../lib/auth.js";
@@ -156,6 +164,38 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify(body),
     }),
+
+  // -- annotations ---------------------------------------------------
+  listAnnotations: (itemId: string) =>
+    request<ListAnnotationsResponse>(`/api/items/${itemId}/annotations`),
+  createAnnotation: (itemId: string, body: AnnotationCreate) =>
+    request<AnnotationResponse>(`/api/items/${itemId}/annotations`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  patchAnnotation: (id: string, body: AnnotationPatch) =>
+    request<AnnotationResponse>(`/api/annotations/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  deleteAnnotation: (id: string) => request<void>(`/api/annotations/${id}`, { method: "DELETE" }),
+
+  // -- shares --------------------------------------------------------
+  listShares: (opts: { resourceType?: string; resourceId?: string } = {}) => {
+    const p = new URLSearchParams();
+    if (opts.resourceType) p.set("resourceType", opts.resourceType);
+    if (opts.resourceId) p.set("resourceId", opts.resourceId);
+    const qs = p.toString();
+    return request<ListSharesResponse>(`/api/shares${qs ? `?${qs}` : ""}`);
+  },
+  createShare: (body: CreateShareRequest) =>
+    request<CreateShareResponse>("/api/shares", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  revokeShare: (id: string) => request<void>(`/api/shares/${id}`, { method: "DELETE" }),
+  resolveShare: (token: string) =>
+    request<ShareResolveResponse>(`/api/shares/${token}`, {}, { auth: false }),
 };
 
 export type { Item, Collection };

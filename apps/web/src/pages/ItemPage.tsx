@@ -1,4 +1,4 @@
-import type { Item } from "@iiif-atlas/shared";
+import type { Annotation, Item } from "@iiif-atlas/shared";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api/client.js";
@@ -17,6 +17,9 @@ export function ItemPage() {
   const [description, setDescription] = useState("");
   const [rights, setRights] = useState("");
   const [newTag, setNewTag] = useState("");
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [newAnnotation, setNewAnnotation] = useState("");
+  const [newAnnotationXywh, setNewAnnotationXywh] = useState("");
 
   useEffect(() => {
     if (!id) return;
@@ -30,6 +33,9 @@ export function ItemPage() {
         setTitle(res.item.title ?? "");
         setDescription(res.item.description ?? "");
         setRights(res.item.rights ?? "");
+        return api.listAnnotations(res.item.id).then((a) => {
+          if (active) setAnnotations(a.annotations);
+        });
       })
       .catch((err) => active && setError(String(err)))
       .finally(() => active && setLoading(false));
@@ -74,6 +80,36 @@ export function ItemPage() {
       await api.removeItemTag(item.id, slug);
       const fresh = await api.getItem(item.id);
       setItem(fresh.item);
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
+  async function addAnnotation(e: React.FormEvent) {
+    e.preventDefault();
+    if (!item || !newAnnotation.trim()) return;
+    try {
+      const trimmed = newAnnotationXywh.trim();
+      const xywh = trimmed && /^\d+,\d+,\d+,\d+$/.test(trimmed) ? trimmed : null;
+      await api.createAnnotation(item.id, {
+        motivation: "commenting",
+        bodyValue: newAnnotation.trim(),
+        targetXywh: xywh,
+      });
+      setNewAnnotation("");
+      setNewAnnotationXywh("");
+      const a = await api.listAnnotations(item.id);
+      setAnnotations(a.annotations);
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
+  async function deleteAnnotation(annotationId: string) {
+    if (!item) return;
+    try {
+      await api.deleteAnnotation(annotationId);
+      setAnnotations((prev) => prev.filter((a) => a.id !== annotationId));
     } catch (err) {
       setError(String(err));
     }
@@ -250,6 +286,58 @@ export function ItemPage() {
           </dl>
         </div>
       </div>
+
+      <section className="card">
+        <h3>Annotations ({annotations.length})</h3>
+        {annotations.length === 0 && <p className="muted">No annotations yet.</p>}
+        <ul className="annotation-list">
+          {annotations.map((a) => (
+            <li key={a.id}>
+              <div className="row-between">
+                <span className="badge">{a.motivation}</span>
+                <button
+                  type="button"
+                  className="btn btn-xs btn-ghost"
+                  onClick={() => deleteAnnotation(a.id)}
+                >
+                  Delete
+                </button>
+              </div>
+              {a.targetXywh && (
+                <div className="muted">
+                  Region: <code>{a.targetXywh}</code>
+                </div>
+              )}
+              {a.bodyValue && <div style={{ whiteSpace: "pre-wrap" }}>{a.bodyValue}</div>}
+              <small className="muted">{new Date(a.createdAt).toLocaleString()}</small>
+            </li>
+          ))}
+        </ul>
+        <form onSubmit={addAnnotation}>
+          <label>
+            Comment
+            <textarea
+              rows={2}
+              value={newAnnotation}
+              onChange={(e) => setNewAnnotation(e.target.value)}
+              placeholder="Add an annotation…"
+            />
+          </label>
+          <label>
+            Region xywh (optional, e.g. <code>100,50,200,300</code>)
+            <input
+              value={newAnnotationXywh}
+              onChange={(e) => setNewAnnotationXywh(e.target.value)}
+              placeholder="x,y,w,h in intrinsic pixels"
+            />
+          </label>
+          <div className="row">
+            <button className="btn" disabled={!newAnnotation.trim()}>
+              Add annotation
+            </button>
+          </div>
+        </form>
+      </section>
 
       {item.manifestUrl && (
         <section className="card">

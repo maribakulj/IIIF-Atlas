@@ -42,6 +42,29 @@ export interface AddTagRequest {
   name: string;
 }
 
+export interface ListAnnotationsResponse {
+  annotations: import("./types.js").Annotation[];
+}
+
+export interface AnnotationResponse {
+  annotation: import("./types.js").Annotation;
+}
+
+export interface ListSharesResponse {
+  shares: import("./types.js").ShareTokenSummary[];
+}
+
+export interface CreateShareRequest {
+  resourceType: import("./types.js").ShareResourceType;
+  resourceId: string;
+  role?: import("./types.js").ShareRole;
+  expiresAt?: string | null;
+}
+
+export interface CreateShareResponse {
+  share: import("./types.js").ShareTokenWithSecret;
+}
+
 export interface ItemResponse {
   item: Item;
 }

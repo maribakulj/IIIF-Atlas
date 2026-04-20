@@ -6,6 +6,13 @@ import { Router } from "./router.js";
 import { processIngestJob } from "./ingest.js";
 import type { IngestMessage } from "./queue.js";
 import { streamR2Object } from "./r2.js";
+import {
+  createAnnotation,
+  deleteAnnotation,
+  getIiifAnnotationPage,
+  listItemAnnotations,
+  updateAnnotation,
+} from "./routes/annotations.js";
 import { createApiKey, devSignup, listApiKeys, me, revokeApiKey } from "./routes/auth.js";
 import { createCapture } from "./routes/captures.js";
 import {
@@ -18,6 +25,7 @@ import { exportItems } from "./routes/export.js";
 import { getCollectionBySlug, getManifestBySlug } from "./routes/iiif.js";
 import { getImageData, getImageInfo } from "./routes/image.js";
 import { generateManifest, getItem, listItems, patchItem, retryItem } from "./routes/items.js";
+import { createShare, listShares, resolveShare, revokeShare } from "./routes/shares.js";
 import { addTagToItem, listTags, removeTagFromItem } from "./routes/tags.js";
 
 const router = new Router()
@@ -35,14 +43,23 @@ const router = new Router()
   .post("/api/items/:id/retry", retryItem)
   .post("/api/items/:id/tags", addTagToItem)
   .del("/api/items/:id/tags/:tag", removeTagFromItem)
+  .get("/api/items/:id/annotations", listItemAnnotations)
+  .post("/api/items/:id/annotations", createAnnotation)
+  .patch("/api/annotations/:id", updateAnnotation)
+  .del("/api/annotations/:id", deleteAnnotation)
   .get("/api/export/items", exportItems)
   .get("/api/tags", listTags)
+  .post("/api/shares", createShare)
+  .get("/api/shares", listShares)
+  .get("/api/shares/:token", resolveShare)
+  .del("/api/shares/:id", revokeShare)
   .get("/api/collections", listCollections)
   .post("/api/collections", createCollection)
   .get("/api/collections/:id", getCollection)
   .patch("/api/collections/:id", updateCollection)
   .get("/iiif/manifests/:slug", getManifestBySlug)
   .get("/iiif/collections/:slug", getCollectionBySlug)
+  .get("/iiif/items/:slug/annotations", getIiifAnnotationPage)
   .get("/iiif/image/:id/info.json", getImageInfo)
   .get("/iiif/image/:id/:region/:size/:rotation/:filename", getImageData)
   .get("/healthz", () => new Response("ok", { status: 200 }));

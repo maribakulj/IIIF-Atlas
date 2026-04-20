@@ -47,7 +47,8 @@ export interface IIIFCanvas {
 export interface IIIFAnnotationPage {
   id: string;
   type: "AnnotationPage";
-  items: IIIFAnnotation[];
+  /** Items MAY be omitted (reference-only page — client fetches by id). */
+  items?: IIIFAnnotation[];
 }
 
 export interface IIIFAnnotation {
@@ -230,12 +231,14 @@ export function buildItemManifest(params: BuildManifestParams): IIIFManifest {
             ],
           },
         ],
-        // Surface a region-of-interest as a non-painting highlighting
-        // annotation; viewers like Mirador render a box overlay, and
-        // the fragment target makes the xywh machine-readable.
-        ...(item.regionXywh
-          ? {
-              annotations: [
+        // Non-painting annotation pages on this canvas:
+        //  - an inline region highlighting (Sprint 4), when an xywh is set
+        //  - a reference to the public AnnotationPage at
+        //    /iiif/items/{slug}/annotations (Sprint 6) so viewers can
+        //    lazy-load comments/highlights without a re-fetch of the manifest
+        annotations: [
+          ...(item.regionXywh
+            ? [
                 {
                   id: `${canvasId}/annotations`,
                   type: "AnnotationPage" as const,
@@ -248,9 +251,13 @@ export function buildItemManifest(params: BuildManifestParams): IIIFManifest {
                     },
                   ],
                 },
-              ],
-            }
-          : {}),
+              ]
+            : []),
+          {
+            id: `${publicBaseUrl}/iiif/items/${item.manifestSlug ?? item.slug}/annotations`,
+            type: "AnnotationPage" as const,
+          },
+        ],
       },
     ],
   };

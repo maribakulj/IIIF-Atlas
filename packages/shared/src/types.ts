@@ -114,6 +114,58 @@ export interface Facets {
 
 export type ItemSort = "captured_at_desc" | "captured_at_asc" | "title_asc";
 
+export type AnnotationMotivation = "commenting" | "tagging" | "highlighting" | "describing";
+
+export interface Annotation {
+  id: string;
+  itemId: string;
+  motivation: AnnotationMotivation;
+  targetXywh: string | null;
+  bodyValue: string | null;
+  bodyFormat: string | null;
+  creatorUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AnnotationCreate {
+  motivation?: AnnotationMotivation;
+  targetXywh?: string | null;
+  bodyValue?: string;
+  bodyFormat?: string;
+}
+
+export type AnnotationPatch = AnnotationCreate;
+
+export type ShareRole = "viewer" | "editor";
+export type ShareResourceType = "collection" | "item";
+
+export interface ShareTokenSummary {
+  id: string;
+  prefix: string;
+  resourceType: ShareResourceType;
+  resourceId: string;
+  role: ShareRole;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
+/** Returned at mint time only; the raw token never hits storage. */
+export interface ShareTokenWithSecret extends ShareTokenSummary {
+  secret: string;
+}
+
+export interface ShareResolveResponse {
+  resourceType: ShareResourceType;
+  resourceId: string;
+  role: ShareRole;
+  workspaceName: string;
+  /** Payload shape mirrors the authenticated GET response for the resource. */
+  collection?: Collection;
+  item?: Item;
+}
+
 export interface CollectionCreate {
   title: string;
   description?: string;
