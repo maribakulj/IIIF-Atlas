@@ -62,6 +62,10 @@ export interface Item {
   assetSha256: string | null;
   /** Region of interest in intrinsic image pixels, as "x,y,w,h". */
   regionXywh: string | null;
+  /** Rights statement or license (URL or SPDX-ish identifier). */
+  rights: string | null;
+  /** Tags attached to this item (slugs). */
+  tags: string[];
 
   capturedAt: string;
   createdAt: string;
@@ -87,7 +91,28 @@ export interface ItemPatch {
   description?: string | null;
   metadata?: Record<string, unknown> | null;
   mode?: IngestionMode;
+  rights?: string | null;
 }
+
+export interface Tag {
+  id: string;
+  name: string;
+  slug: string;
+  itemCount?: number;
+}
+
+export interface Facet {
+  value: string;
+  count: number;
+}
+
+export interface Facets {
+  mode: Facet[];
+  tag: Facet[];
+  sourceHost: Facet[];
+}
+
+export type ItemSort = "captured_at_desc" | "captured_at_asc" | "title_asc";
 
 export interface CollectionCreate {
   title: string;

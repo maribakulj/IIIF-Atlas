@@ -31,6 +31,15 @@ export interface ListItemsResponse {
   total: number;
   limit: number;
   offset: number;
+  facets?: import("./types.js").Facets;
+}
+
+export interface ListTagsResponse {
+  tags: import("./types.js").Tag[];
+}
+
+export interface AddTagRequest {
+  name: string;
 }
 
 export interface ItemResponse {

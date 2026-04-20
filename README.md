@@ -68,6 +68,30 @@ iiif-atlas/
 - `source_manifest_url` is preserved in item metadata when `iiif_reuse` is used.
 - Captures are stored raw in the `captures` table alongside the resulting item for audit.
 
+## Search, tags & exports (Sprint 5)
+
+- **Full-text search**. `GET /api/items?q=…` now runs against a D1 FTS5
+  virtual table kept in sync via triggers (`apps/api/migrations/
+  0005_fts_tags.sql`). Queries are tokenised with the Porter stemmer
+  and each term gets a prefix match (`term*`), so as-you-type search
+  "just works". FTS5 reserved characters (`" ( ) * :`) are stripped
+  from user input.
+- **Tags**. Per-workspace, auto-created by slug. Attach with
+  `POST /api/items/:id/tags {name}`, detach with
+  `DELETE /api/items/:id/tags/:slug`, enumerate via `GET /api/tags`
+  (with item counts). Items carry their tag slugs on every list/get
+  response.
+- **Facets**. Pass `?facets=1` to `GET /api/items` for post-filter
+  counts on `mode`, `tag`, and `sourceHost` (a heuristic host
+  extraction from `source_page_url`).
+- **Sorting**. `?sort=captured_at_desc|captured_at_asc|title_asc`.
+- **Rights**. `items.rights` stores a URL (e.g. a Creative Commons
+  deed) or an identifier; exposed on every item, settable via PATCH.
+- **Export**. `GET /api/export/items?format=json|csv|ris` streams the
+  current workspace (honouring the same q/tag/mode/rights filters) in
+  one of three shapes. The RIS variant uses `TY - ART` so Zotero
+  imports each capture as an "Artwork" record.
+
 ## Advanced capture (Sprint 4)
 
 - **Region of interest**. Right-click any image → *Clip region of this

@@ -14,9 +14,11 @@ import {
   listCollections,
   updateCollection,
 } from "./routes/collections.js";
+import { exportItems } from "./routes/export.js";
 import { getCollectionBySlug, getManifestBySlug } from "./routes/iiif.js";
 import { getImageData, getImageInfo } from "./routes/image.js";
 import { generateManifest, getItem, listItems, patchItem, retryItem } from "./routes/items.js";
+import { addTagToItem, listTags, removeTagFromItem } from "./routes/tags.js";
 
 const router = new Router()
   .post("/api/auth/dev-signup", devSignup)
@@ -31,6 +33,10 @@ const router = new Router()
   .patch("/api/items/:id", patchItem)
   .post("/api/items/:id/generate-manifest", generateManifest)
   .post("/api/items/:id/retry", retryItem)
+  .post("/api/items/:id/tags", addTagToItem)
+  .del("/api/items/:id/tags/:tag", removeTagFromItem)
+  .get("/api/export/items", exportItems)
+  .get("/api/tags", listTags)
   .get("/api/collections", listCollections)
   .post("/api/collections", createCollection)
   .get("/api/collections/:id", getCollection)

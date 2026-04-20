@@ -15,6 +15,8 @@ export function ItemPage() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [rights, setRights] = useState("");
+  const [newTag, setNewTag] = useState("");
 
   useEffect(() => {
     if (!id) return;
@@ -27,6 +29,7 @@ export function ItemPage() {
         setItem(res.item);
         setTitle(res.item.title ?? "");
         setDescription(res.item.description ?? "");
+        setRights(res.item.rights ?? "");
       })
       .catch((err) => active && setError(String(err)))
       .finally(() => active && setLoading(false));
@@ -39,12 +42,40 @@ export function ItemPage() {
     if (!item) return;
     setSaving(true);
     try {
-      const res = await api.patchItem(item.id, { title, description });
+      const res = await api.patchItem(item.id, {
+        title,
+        description,
+        rights: rights.trim() || null,
+      });
       setItem(res.item);
     } catch (err) {
       setError(String(err));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function addTag(e: React.FormEvent) {
+    e.preventDefault();
+    if (!item || !newTag.trim()) return;
+    try {
+      await api.addItemTag(item.id, { name: newTag.trim() });
+      setNewTag("");
+      const fresh = await api.getItem(item.id);
+      setItem(fresh.item);
+    } catch (err) {
+      setError(String(err));
+    }
+  }
+
+  async function removeTag(slug: string) {
+    if (!item) return;
+    try {
+      await api.removeItemTag(item.id, slug);
+      const fresh = await api.getItem(item.id);
+      setItem(fresh.item);
+    } catch (err) {
+      setError(String(err));
     }
   }
 
@@ -117,6 +148,14 @@ export function ItemPage() {
               onChange={(e) => setDescription(e.target.value)}
             />
           </label>
+          <label>
+            Rights (URL or SPDX)
+            <input
+              value={rights}
+              onChange={(e) => setRights(e.target.value)}
+              placeholder="https://creativecommons.org/licenses/by/4.0/"
+            />
+          </label>
           <div className="row">
             <button className="btn" disabled={saving} onClick={save}>
               {saving ? "Saving…" : "Save"}
@@ -124,6 +163,36 @@ export function ItemPage() {
             <button className="btn btn-ghost" disabled={saving} onClick={regenerate}>
               Regenerate manifest
             </button>
+          </div>
+
+          <div style={{ marginTop: 16 }}>
+            <label style={{ marginBottom: 4 }}>Tags</label>
+            <div className="facets">
+              {item.tags.map((t) => (
+                <span key={t} className="chip chip-active">
+                  {t}
+                  <button
+                    type="button"
+                    className="chip-x"
+                    onClick={() => removeTag(t)}
+                    aria-label={`Remove tag ${t}`}
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+              {item.tags.length === 0 && <span className="muted">No tags yet.</span>}
+            </div>
+            <form onSubmit={addTag} className="row">
+              <input
+                value={newTag}
+                onChange={(e) => setNewTag(e.target.value)}
+                placeholder="Add tag…"
+              />
+              <button className="btn btn-xs" disabled={!newTag.trim()}>
+                Add
+              </button>
+            </form>
           </div>
         </div>
 
