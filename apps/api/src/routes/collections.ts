@@ -3,6 +3,7 @@ import type {
   CollectionResponse,
   ListCollectionsResponse,
 } from "@iiif-atlas/shared";
+import { recordActivity } from "../activity.js";
 import { requireAuth, requireWriter } from "../auth.js";
 import { mapCollection, mapItem } from "../db.js";
 import type { CollectionRow, ItemRow } from "../db.js";
@@ -71,6 +72,9 @@ export async function createCollection(req: Request, env: Env): Promise<Response
     }
   }
 
+  if (body.isPublic !== false) {
+    await recordActivity(env, "Create", "Collection", slug);
+  }
   return getCollectionResponse(env, id, 201);
 }
 
@@ -151,6 +155,13 @@ export async function updateCollection(
         await env.DB.batch(stmts);
       }
     }
+  }
+
+  // Report the update on the public feed iff the collection is currently
+  // public. Collections flipping to private produce no event.
+  const effectivePublic = body.isPublic === undefined ? Boolean(row.is_public) : body.isPublic;
+  if (effectivePublic) {
+    await recordActivity(env, "Update", "Collection", row.slug);
   }
 
   return getCollectionResponse(env, row.id, 200);

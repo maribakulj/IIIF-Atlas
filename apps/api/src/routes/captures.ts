@@ -5,6 +5,7 @@ import type {
   ItemStatus,
 } from "@iiif-atlas/shared";
 import { classifyIIIFJson } from "@iiif-atlas/shared";
+import { recordActivity } from "../activity.js";
 import { requireAuth, requireWriter } from "../auth.js";
 import { mapItem } from "../db.js";
 import type { ItemRow } from "../db.js";
@@ -109,6 +110,9 @@ export async function createCapture(req: Request, env: Env): Promise<Response> {
       `INSERT INTO captures (id, payload_json, resulting_item_id, workspace_id) VALUES (?,?,?,?)`,
     ).bind(captureId, JSON.stringify(body), itemId, auth.workspaceId),
   ]);
+
+  // Announce the new manifest on the public Change Discovery feed.
+  await recordActivity(env, "Create", "Manifest", manifestSlug);
 
   // Hand off the heavy lifting. With INGEST_QUEUE this returns immediately;
   // without it (tests, single-instance dev) the work runs inline before
