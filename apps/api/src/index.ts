@@ -21,6 +21,12 @@ import {
   listCollections,
   updateCollection,
 } from "./routes/collections.js";
+import {
+  getActivityCollection,
+  getActivityPage,
+  getOembed,
+  getSitemap,
+} from "./routes/discovery.js";
 import { exportItems } from "./routes/export.js";
 import { getCollectionBySlug, getManifestBySlug } from "./routes/iiif.js";
 import { getImageData, getImageInfo } from "./routes/image.js";
@@ -62,6 +68,10 @@ const router = new Router()
   .get("/iiif/items/:slug/annotations", getIiifAnnotationPage)
   .get("/iiif/image/:id/info.json", getImageInfo)
   .get("/iiif/image/:id/:region/:size/:rotation/:filename", getImageData)
+  .get("/iiif/activity.json", getActivityCollection)
+  .get("/iiif/activity/page/:n", getActivityPage)
+  .get("/sitemap.xml", getSitemap)
+  .get("/oembed", getOembed)
   .get("/healthz", () => new Response("ok", { status: 200 }));
 
 export default {

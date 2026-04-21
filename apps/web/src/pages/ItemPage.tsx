@@ -5,6 +5,7 @@ import { api } from "../api/client.js";
 import { MiradorViewer } from "../components/MiradorViewer.js";
 import { ModeBadge } from "../components/ModeBadge.js";
 import { StatusBadge } from "../components/StatusBadge.js";
+import { ViewerLinks } from "../components/ViewerLinks.js";
 
 export function ItemPage() {
   const { id } = useParams<{ id: string }>();
@@ -342,6 +343,7 @@ export function ItemPage() {
       {item.manifestUrl && (
         <section className="card">
           <h3>Viewer</h3>
+          <ViewerLinks manifestUrl={item.manifestUrl} />
           <MiradorViewer manifestUrl={item.manifestUrl} />
         </section>
       )}

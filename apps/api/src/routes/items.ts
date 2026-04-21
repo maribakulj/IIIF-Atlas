@@ -6,6 +6,7 @@ import type {
   ItemSort,
   ListItemsResponse,
 } from "@iiif-atlas/shared";
+import { recordActivity } from "../activity.js";
 import { requireAuth, requireWriter } from "../auth.js";
 import { mapItem } from "../db.js";
 import type { ItemRow } from "../db.js";
@@ -243,6 +244,9 @@ export async function patchItem(
     .bind(row.id)
     .first<ItemRow>();
   if (!updated) throw notFound();
+  if (updated.manifest_slug) {
+    await recordActivity(env, "Update", "Manifest", updated.manifest_slug);
+  }
   const payload: ItemResponse = { item: mapItem(updated, env.PUBLIC_BASE_URL) };
   return Response.json(payload);
 }

@@ -68,6 +68,27 @@ iiif-atlas/
 - `source_manifest_url` is preserved in item metadata when `iiif_reuse` is used.
 - Captures are stored raw in the `captures` table alongside the resulting item for audit.
 
+## Publication & interop (Sprint 7)
+
+- **IIIF Change Discovery 1**. `GET /iiif/activity.json` serves an
+  `OrderedCollection` and `GET /iiif/activity/page/:n` paginated
+  `OrderedCollectionPage`s (100 events per page, oldest → newest). Every
+  manifest Create/Update and every *public* collection Create/Update
+  appends one row to `activity_events` — private collections never
+  leak. Federated consumers (aggregators, other IIIF sites) can poll
+  the feed to discover new content without walking every manifest URL.
+- **Sitemap**. `GET /sitemap.xml` enumerates public manifest + public
+  collection URLs with `lastmod` stamps for search-engine and aggregator
+  ingestion.
+- **oEmbed**. `GET /oembed?url=<manifest-url>&format=json` returns a
+  `"rich"` oEmbed payload whose `html` embeds a Mirador viewer pointed
+  at the manifest — Slack, WordPress, and Discourse auto-preview on
+  paste once a consumer advertises the endpoint via `<link rel="alternate"
+  type="application/json+oembed">`.
+- **"Open in…"**. Item pages (and the Mirador viewer section) now expose
+  one-click links to Mirador's embed page, Universal Viewer 4, and the
+  raw manifest JSON.
+
 ## Annotations & share links (Sprint 6)
 
 - **Annotations** are IIIF Web Annotations stored one-per-row.
