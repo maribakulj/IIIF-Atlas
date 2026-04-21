@@ -17,8 +17,10 @@ import { createApiKey, devSignup, listApiKeys, me, revokeApiKey } from "./routes
 import { createCapture } from "./routes/captures.js";
 import {
   createCollection,
+  deleteCollection,
   getCollection,
   listCollections,
+  restoreCollection,
   updateCollection,
 } from "./routes/collections.js";
 import {
@@ -30,9 +32,19 @@ import {
 import { exportItems } from "./routes/export.js";
 import { getCollectionBySlug, getManifestBySlug } from "./routes/iiif.js";
 import { getImageData, getImageInfo } from "./routes/image.js";
-import { generateManifest, getItem, listItems, patchItem, retryItem } from "./routes/items.js";
+import {
+  deleteItem,
+  generateManifest,
+  getItem,
+  listItems,
+  patchItem,
+  restoreItem,
+  retryItem,
+} from "./routes/items.js";
 import { createShare, listShares, resolveShare, revokeShare } from "./routes/shares.js";
 import { addTagToItem, listTags, removeTagFromItem } from "./routes/tags.js";
+import { listTrash } from "./routes/trash.js";
+import { getWorkspaceUsage } from "./routes/workspaces.js";
 
 const router = new Router()
   .post("/api/auth/dev-signup", devSignup)
@@ -45,6 +57,8 @@ const router = new Router()
   .post("/api/items", createCapture) // POST /api/items is an alias used by the web app
   .get("/api/items/:id", getItem)
   .patch("/api/items/:id", patchItem)
+  .del("/api/items/:id", deleteItem)
+  .post("/api/items/:id/restore", restoreItem)
   .post("/api/items/:id/generate-manifest", generateManifest)
   .post("/api/items/:id/retry", retryItem)
   .post("/api/items/:id/tags", addTagToItem)
@@ -63,6 +77,10 @@ const router = new Router()
   .post("/api/collections", createCollection)
   .get("/api/collections/:id", getCollection)
   .patch("/api/collections/:id", updateCollection)
+  .del("/api/collections/:id", deleteCollection)
+  .post("/api/collections/:id/restore", restoreCollection)
+  .get("/api/trash", listTrash)
+  .get("/api/workspaces/current/usage", getWorkspaceUsage)
   .get("/iiif/manifests/:slug", getManifestBySlug)
   .get("/iiif/collections/:slug", getCollectionBySlug)
   .get("/iiif/items/:slug/annotations", getIiifAnnotationPage)
@@ -137,9 +155,15 @@ function withCors(res: Response, req: Request, env: Env): Response {
 
 function errorResponse(err: unknown): Response {
   if (err instanceof HttpError) {
-    return Response.json(
-      { error: err.code, message: err.message, details: err.details ?? null },
-      { status: err.status },
+    const headers = new Headers({ "content-type": "application/json" });
+    // Surface Retry-After when the HttpError carries a retryAfter detail.
+    const details = err.details as { retryAfter?: number } | null | undefined;
+    if (details && typeof details.retryAfter === "number") {
+      headers.set("Retry-After", String(details.retryAfter));
+    }
+    return new Response(
+      JSON.stringify({ error: err.code, message: err.message, details: err.details ?? null }),
+      { status: err.status, headers },
     );
   }
   const message = err instanceof Error ? err.message : "Unknown error";

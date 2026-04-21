@@ -4,6 +4,7 @@ import type {
   ListCollectionsResponse,
 } from "@iiif-atlas/shared";
 import { recordActivity } from "../activity.js";
+import { recordAudit } from "../audit.js";
 import { requireAuth, requireWriter } from "../auth.js";
 import { mapCollection, mapItem } from "../db.js";
 import type { CollectionRow, ItemRow } from "../db.js";
@@ -16,7 +17,7 @@ export async function listCollections(req: Request, env: Env): Promise<Response>
   const rows = await env.DB.prepare(
     `SELECT c.*, (SELECT COUNT(*) FROM collection_items ci WHERE ci.collection_id = c.id) AS item_count
        FROM collections c
-      WHERE c.workspace_id = ?
+      WHERE c.workspace_id = ? AND c.deleted_at IS NULL
       ORDER BY c.updated_at DESC`,
   )
     .bind(auth.workspaceId)
@@ -75,6 +76,14 @@ export async function createCollection(req: Request, env: Env): Promise<Response
   if (body.isPublic !== false) {
     await recordActivity(env, "Create", "Collection", slug);
   }
+  await recordAudit(
+    env,
+    { workspaceId: auth.workspaceId, userId: auth.userId },
+    "collection.create",
+    "collection",
+    id,
+    { slug, isPublic: body.isPublic !== false },
+  );
   return getCollectionResponse(env, id, 201);
 }
 
@@ -86,7 +95,7 @@ export async function getCollection(
 ): Promise<Response> {
   const auth = await requireAuth(req, env);
   const row = await env.DB.prepare(
-    `SELECT * FROM collections WHERE (id = ? OR slug = ?) AND workspace_id = ?`,
+    `SELECT * FROM collections WHERE (id = ? OR slug = ?) AND workspace_id = ? AND deleted_at IS NULL`,
   )
     .bind(params.id, params.id, auth.workspaceId)
     .first<CollectionRow>();
@@ -108,7 +117,7 @@ export async function updateCollection(
   if (!body || typeof body !== "object") throw badRequest("Invalid JSON body");
 
   const row = await env.DB.prepare(
-    `SELECT * FROM collections WHERE (id = ? OR slug = ?) AND workspace_id = ?`,
+    `SELECT * FROM collections WHERE (id = ? OR slug = ?) AND workspace_id = ? AND deleted_at IS NULL`,
   )
     .bind(params.id, params.id, auth.workspaceId)
     .first<CollectionRow>();
@@ -163,7 +172,88 @@ export async function updateCollection(
   if (effectivePublic) {
     await recordActivity(env, "Update", "Collection", row.slug);
   }
+  await recordAudit(
+    env,
+    { workspaceId: auth.workspaceId, userId: auth.userId },
+    "collection.update",
+    "collection",
+    row.id,
+    { fields: Object.keys(body) },
+  );
 
+  return getCollectionResponse(env, row.id, 200);
+}
+
+export async function deleteCollection(
+  req: Request,
+  env: Env,
+  _ctx: ExecutionContext,
+  params: Record<string, string>,
+): Promise<Response> {
+  const auth = await requireAuth(req, env);
+  requireWriter(auth);
+  const row = await env.DB.prepare(
+    `SELECT id, slug, is_public FROM collections
+      WHERE (id = ? OR slug = ?) AND workspace_id = ? AND deleted_at IS NULL`,
+  )
+    .bind(params.id, params.id, auth.workspaceId)
+    .first<{ id: string; slug: string; is_public: number }>();
+  if (!row) throw notFound();
+
+  await env.DB.prepare(
+    `UPDATE collections
+        SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+      WHERE id = ?`,
+  )
+    .bind(row.id)
+    .run();
+  if (row.is_public) {
+    await recordActivity(env, "Delete", "Collection", row.slug);
+  }
+  await recordAudit(
+    env,
+    { workspaceId: auth.workspaceId, userId: auth.userId },
+    "collection.delete",
+    "collection",
+    row.id,
+  );
+  return new Response(null, { status: 204 });
+}
+
+export async function restoreCollection(
+  req: Request,
+  env: Env,
+  _ctx: ExecutionContext,
+  params: Record<string, string>,
+): Promise<Response> {
+  const auth = await requireAuth(req, env);
+  requireWriter(auth);
+  const row = await env.DB.prepare(
+    `SELECT id, slug, is_public FROM collections
+      WHERE (id = ? OR slug = ?) AND workspace_id = ? AND deleted_at IS NOT NULL`,
+  )
+    .bind(params.id, params.id, auth.workspaceId)
+    .first<{ id: string; slug: string; is_public: number }>();
+  if (!row) throw notFound("Collection not in trash");
+
+  await env.DB.prepare(
+    `UPDATE collections SET deleted_at = NULL,
+                            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+       WHERE id = ?`,
+  )
+    .bind(row.id)
+    .run();
+  if (row.is_public) {
+    await recordActivity(env, "Create", "Collection", row.slug);
+  }
+  await recordAudit(
+    env,
+    { workspaceId: auth.workspaceId, userId: auth.userId },
+    "collection.restore",
+    "collection",
+    row.id,
+  );
   return getCollectionResponse(env, row.id, 200);
 }
 
@@ -175,7 +265,7 @@ async function getCollectionResponse(env: Env, id: string, status: number): Prom
   const items = await env.DB.prepare(
     `SELECT i.* FROM items i
      INNER JOIN collection_items ci ON ci.item_id = i.id
-     WHERE ci.collection_id = ?
+     WHERE ci.collection_id = ? AND i.deleted_at IS NULL
      ORDER BY ci.position ASC`,
   )
     .bind(id)

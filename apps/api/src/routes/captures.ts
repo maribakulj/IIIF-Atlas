@@ -6,20 +6,40 @@ import type {
 } from "@iiif-atlas/shared";
 import { classifyIIIFJson } from "@iiif-atlas/shared";
 import { recordActivity } from "../activity.js";
+import { recordAudit } from "../audit.js";
 import { requireAuth, requireWriter } from "../auth.js";
 import { mapItem } from "../db.js";
 import type { ItemRow } from "../db.js";
 import type { Env } from "../env.js";
 import { getLimits } from "../env.js";
-import { badRequest, unprocessable } from "../errors.js";
+import { badRequest, tooManyRequests, unprocessable } from "../errors.js";
 import { safeFetchJson } from "../fetch-safe.js";
 import { enqueueIngest } from "../queue.js";
+import { checkRateLimit } from "../ratelimit.js";
 import { itemSlug, ulid } from "../slug.js";
 import { assertOutboundUrl } from "../ssrf.js";
+
+/** 30 captures/minute sustained, burst of 30. Plenty for a human, */
+/** throttles a runaway bot. */
+const CAPTURE_CAPACITY = 30;
+const CAPTURE_REFILL_PER_SECOND = 0.5;
 
 export async function createCapture(req: Request, env: Env): Promise<Response> {
   const auth = await requireAuth(req, env);
   requireWriter(auth);
+
+  const limit = await checkRateLimit(
+    env,
+    `capture:${auth.apiKeyId}`,
+    CAPTURE_CAPACITY,
+    CAPTURE_REFILL_PER_SECOND,
+  );
+  if (!limit.allowed) {
+    throw tooManyRequests("Capture rate limit exceeded", {
+      retryAfter: limit.retryAfter ?? 1,
+    });
+  }
+
   const body = (await req.json().catch(() => null)) as CapturePayload | null;
   if (!body || typeof body !== "object") throw badRequest("Invalid JSON body");
 
@@ -113,6 +133,14 @@ export async function createCapture(req: Request, env: Env): Promise<Response> {
 
   // Announce the new manifest on the public Change Discovery feed.
   await recordActivity(env, "Create", "Manifest", manifestSlug);
+  await recordAudit(
+    env,
+    { workspaceId: auth.workspaceId, userId: auth.userId },
+    "item.create",
+    "item",
+    itemId,
+    { mode, slug },
+  );
 
   // Hand off the heavy lifting. With INGEST_QUEUE this returns immediately;
   // without it (tests, single-instance dev) the work runs inline before

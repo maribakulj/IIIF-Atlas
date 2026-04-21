@@ -36,7 +36,7 @@ export async function exportItems(req: Request, env: Env): Promise<Response> {
   }
 
   const joins: string[] = [];
-  const where: string[] = ["i.workspace_id = ?"];
+  const where: string[] = ["i.workspace_id = ?", "i.deleted_at IS NULL"];
   const binds: unknown[] = [auth.workspaceId];
   if (q) {
     const ftsQuery = q

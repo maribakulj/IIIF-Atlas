@@ -16,7 +16,9 @@ export async function getManifestBySlug(
   _ctx: ExecutionContext,
   params: Record<string, string>,
 ): Promise<Response> {
-  const row = await env.DB.prepare(`SELECT * FROM items WHERE manifest_slug = ? OR slug = ?`)
+  const row = await env.DB.prepare(
+    `SELECT * FROM items WHERE (manifest_slug = ? OR slug = ?) AND deleted_at IS NULL`,
+  )
     .bind(params.slug, params.slug)
     .first<ItemRow>();
   if (!row) throw notFound("Manifest not found");
@@ -48,7 +50,9 @@ export async function getCollectionBySlug(
   _ctx: ExecutionContext,
   params: Record<string, string>,
 ): Promise<Response> {
-  const row = await env.DB.prepare(`SELECT * FROM collections WHERE slug = ?`)
+  const row = await env.DB.prepare(
+    `SELECT * FROM collections WHERE slug = ? AND deleted_at IS NULL`,
+  )
     .bind(params.slug)
     .first<CollectionRow>();
   if (!row) throw notFound("Collection not found");
@@ -58,7 +62,7 @@ export async function getCollectionBySlug(
   const items = await env.DB.prepare(
     `SELECT i.* FROM items i
      INNER JOIN collection_items ci ON ci.item_id = i.id
-     WHERE ci.collection_id = ?
+     WHERE ci.collection_id = ? AND i.deleted_at IS NULL
      ORDER BY ci.position ASC`,
   )
     .bind(row.id)

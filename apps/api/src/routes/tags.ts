@@ -55,7 +55,7 @@ export async function addTagToItem(
   }
 
   const item = await env.DB.prepare(
-    `SELECT id FROM items WHERE (id = ? OR slug = ?) AND workspace_id = ?`,
+    `SELECT id FROM items WHERE (id = ? OR slug = ?) AND workspace_id = ? AND deleted_at IS NULL`,
   )
     .bind(params.id, params.id, auth.workspaceId)
     .first<{ id: string }>();
@@ -94,7 +94,7 @@ export async function removeTagFromItem(
   requireWriter(auth);
 
   const item = await env.DB.prepare(
-    `SELECT id FROM items WHERE (id = ? OR slug = ?) AND workspace_id = ?`,
+    `SELECT id FROM items WHERE (id = ? OR slug = ?) AND workspace_id = ? AND deleted_at IS NULL`,
   )
     .bind(params.id, params.id, auth.workspaceId)
     .first<{ id: string }>();
