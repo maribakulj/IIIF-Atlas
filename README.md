@@ -1,10 +1,9 @@
 # IIIF Atlas — Visual Zotero for IIIF
 
-Capture images from the web, detect existing IIIF resources, and publish
-stable IIIF Presentation 3 manifests and collections. **v1.0.0** —
-Cloudflare (Workers + D1 + R2) backend with a React web app and a
-WebExtension MV3 browser extension. See [CHANGELOG.md](./CHANGELOG.md)
-for the full release notes.
+Capture images from the web or detect existing IIIF resources, and publish
+stable IIIF Presentation 3 manifests and collections. MVP built on
+Cloudflare (Workers + D1 + R2) with a React web app and a WebExtension MV3
+browser extension.
 
 ## Repository layout
 
