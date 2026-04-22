@@ -18,6 +18,21 @@ export function looksLikeManifestUrl(url: string): boolean {
 }
 
 /**
+ * Only accept URLs that resolve to a safe, fetchable scheme. Hostile pages
+ * inject `javascript:`, `data:`, `blob:` into metadata attributes — we
+ * drop those so they never reach the capture pipeline.
+ */
+function isSafeHttpUrl(u: string, baseURI: string): string | null {
+  try {
+    const abs = new URL(u, baseURI);
+    if (abs.protocol !== "https:" && abs.protocol !== "http:") return null;
+    return abs.toString();
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Detect IIIF signals and image candidates from a DOM document.
  * Intended to run in a content script (browser extension).
  */
@@ -26,14 +41,11 @@ export function detectFromDocument(doc: Document): DetectResult {
   const seen = new Set<string>();
   const push = (u?: string | null) => {
     if (!u) return;
-    try {
-      const abs = new URL(u, doc.baseURI).toString();
-      if (!seen.has(abs)) {
-        seen.add(abs);
-        result.imageCandidates.push(abs);
-      }
-    } catch {
-      /* ignore invalid URLs */
+    const safe = isSafeHttpUrl(u, doc.baseURI);
+    if (!safe) return;
+    if (!seen.has(safe)) {
+      seen.add(safe);
+      result.imageCandidates.push(safe);
     }
   };
 
@@ -42,7 +54,7 @@ export function detectFromDocument(doc: Document): DetectResult {
   for (const ln of Array.from(links)) {
     const rel = (ln.rel || "").toLowerCase();
     const type = (ln.type || "").toLowerCase();
-    const href = ln.href;
+    const href = isSafeHttpUrl(ln.href, doc.baseURI);
     if (!href) continue;
     if (
       rel.includes("iiif") ||
@@ -74,12 +86,10 @@ export function detectFromDocument(doc: Document): DetectResult {
       el.getAttribute("data-manifest") ??
       el.getAttribute("data-iiif");
     if (attr) {
-      try {
-        const abs = new URL(attr, doc.baseURI).toString();
+      const abs = isSafeHttpUrl(attr, doc.baseURI);
+      if (abs) {
         if (looksLikeInfoJson(abs)) result.infoJsonUrl ??= abs;
         else result.manifestUrl ??= abs;
-      } catch {
-        /* ignore */
       }
     }
   }
@@ -89,12 +99,10 @@ export function detectFromDocument(doc: Document): DetectResult {
     'meta[name="iiif:manifest"], meta[property="iiif:manifest"], meta[name="iiif-manifest"]',
   )?.content;
   if (metaManifest) {
-    try {
-      const abs = new URL(metaManifest, doc.baseURI).toString();
+    const abs = isSafeHttpUrl(metaManifest, doc.baseURI);
+    if (abs) {
       if (looksLikeInfoJson(abs)) result.infoJsonUrl ??= abs;
       else result.manifestUrl ??= abs;
-    } catch {
-      /* ignore */
     }
   }
 
@@ -107,8 +115,8 @@ export function detectFromDocument(doc: Document): DetectResult {
       const text = s.textContent ?? "";
       if (IIIF_CONTEXT_PATTERNS.some((re) => re.test(text))) {
         const m = text.match(/"id"\s*:\s*"([^"]+)"/);
-        if (m && m[1]) {
-          const candidate = m[1];
+        const candidate = m?.[1] ? isSafeHttpUrl(m[1], doc.baseURI) : null;
+        if (candidate) {
           if (looksLikeInfoJson(candidate)) result.infoJsonUrl ??= candidate;
           else result.manifestUrl ??= candidate;
           break;
@@ -137,8 +145,9 @@ export function detectFromDocument(doc: Document): DetectResult {
     .sort((a, b) => b.area - a.area);
   for (const r of ranked.slice(0, 10)) push(r.url);
 
-  // Primary image: prefer og:image, else the largest <img>
-  result.primaryImageUrl = og || tw || ranked[0]?.url || result.imageCandidates[0];
+  // Primary image comes from imageCandidates[], which push() has already
+  // validated as http(s). Never expose an unvalidated URL here.
+  result.primaryImageUrl = result.imageCandidates[0];
 
   // Title
   result.pageTitle = doc.title || undefined;

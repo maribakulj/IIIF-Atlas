@@ -10,6 +10,7 @@ import { mapCollection, mapItem } from "../db.js";
 import type { CollectionRow, ItemRow } from "../db.js";
 import type { Env } from "../env.js";
 import { badRequest, notFound } from "../errors.js";
+import { revokeSharesFor } from "../shares-revoke.js";
 import { shortId, slugify, ulid } from "../slug.js";
 
 export async function listCollections(req: Request, env: Env): Promise<Response> {
@@ -208,6 +209,7 @@ export async function deleteCollection(
   )
     .bind(row.id)
     .run();
+  const revoked = await revokeSharesFor(env, "collection", row.id);
   if (row.is_public) {
     await recordActivity(env, "Delete", "Collection", row.slug);
   }
@@ -217,6 +219,7 @@ export async function deleteCollection(
     "collection.delete",
     "collection",
     row.id,
+    revoked > 0 ? { revokedShares: revoked } : undefined,
   );
   return new Response(null, { status: 204 });
 }

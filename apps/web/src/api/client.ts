@@ -35,10 +35,16 @@ import { apiUrl } from "../lib/config.js";
 export class ApiError extends Error {
   status: number;
   code: string;
-  constructor(status: number, code: string, message: string) {
+  /** Seconds the caller should wait before retrying; set for 429 responses. */
+  retryAfter: number | null;
+  constructor(status: number, code: string, message: string, retryAfter: number | null = null) {
     super(message);
     this.status = status;
     this.code = code;
+    this.retryAfter = retryAfter;
+  }
+  get isRateLimited(): boolean {
+    return this.status === 429;
   }
 }
 
@@ -68,7 +74,13 @@ async function request<T>(
       body = await res.text();
     }
     const b = body as { code?: string; error?: string; message?: string };
-    throw new ApiError(res.status, b.code ?? b.error ?? "error", b.message ?? `HTTP ${res.status}`);
+    const retryAfterHeader = res.headers.get("retry-after");
+    const retryAfter = retryAfterHeader ? Number.parseInt(retryAfterHeader, 10) || null : null;
+    const fallback =
+      res.status === 429
+        ? `Too many requests — retry in ${retryAfter ?? "a few"}s`
+        : `HTTP ${res.status}`;
+    throw new ApiError(res.status, b.code ?? b.error ?? "error", b.message ?? fallback, retryAfter);
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;

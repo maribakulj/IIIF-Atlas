@@ -21,12 +21,19 @@ function mapTag(row: TagRow & { item_count?: number }): Tag {
 
 export async function listTags(req: Request, env: Env): Promise<Response> {
   const auth = await requireAuth(req, env);
+  // Single-pass count: LEFT JOIN item_tags+items so tags with zero live
+  // items still appear with item_count = 0, and deleted items are
+  // excluded from the count without a per-tag subquery.
   const rows = await env.DB.prepare(
     `SELECT t.id, t.name, t.slug,
-            (SELECT COUNT(*) FROM item_tags it WHERE it.tag_id = t.id) AS item_count
+            COUNT(i.id) AS item_count
        FROM tags t
+       LEFT JOIN item_tags it ON it.tag_id = t.id
+       LEFT JOIN items i     ON i.id = it.item_id AND i.deleted_at IS NULL
       WHERE t.workspace_id = ?
-      ORDER BY t.name COLLATE NOCASE ASC`,
+      GROUP BY t.id
+      ORDER BY t.name COLLATE NOCASE ASC
+      LIMIT 2000`,
   )
     .bind(auth.workspaceId)
     .all<TagRow & { item_count: number }>();

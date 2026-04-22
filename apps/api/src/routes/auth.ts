@@ -152,7 +152,8 @@ export async function me(req: Request, env: Env): Promise<Response> {
        FROM workspace_members m
        JOIN workspaces w ON w.id = m.workspace_id
       WHERE m.user_id = ?
-      ORDER BY w.created_at ASC`,
+      ORDER BY w.created_at ASC
+      LIMIT 100`,
   )
     .bind(ctx.userId)
     .all<WorkspaceRow & { role: WorkspaceRole }>();
@@ -178,7 +179,8 @@ export async function listApiKeys(req: Request, env: Env): Promise<Response> {
     `SELECT id, name, prefix, workspace_id, scopes, last_used_at, created_at, revoked_at
        FROM api_keys
       WHERE user_id = ?
-      ORDER BY created_at DESC`,
+      ORDER BY created_at DESC
+      LIMIT 500`,
   )
     .bind(ctx.userId)
     .all<ApiKeySummaryRow>();

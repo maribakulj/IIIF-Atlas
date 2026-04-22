@@ -13,23 +13,16 @@ import { mapItem } from "../db.js";
 import type { ItemRow } from "../db.js";
 import type { Env } from "../env.js";
 import { badRequest, notFound, unprocessable } from "../errors.js";
+import { toFtsQuery } from "../fts.js";
 import { buildManifestForItem } from "../iiif-builder.js";
 import { enqueueIngest } from "../queue.js";
+import { revokeSharesFor } from "../shares-revoke.js";
 
 const SORTS: Record<ItemSort, string> = {
   captured_at_desc: "i.captured_at DESC",
   captured_at_asc: "i.captured_at ASC",
   title_asc: "COALESCE(i.title, i.slug) COLLATE NOCASE ASC",
 };
-
-/** Sanitize a user query for FTS5 MATCH: strip reserved chars, prefix-match each term. */
-function toFtsQuery(q: string): string {
-  const cleaned = q.replace(/["()*:]/g, " ").trim();
-  const tokens = cleaned.split(/\s+/).filter((t) => t.length > 0);
-  if (tokens.length === 0) return "";
-  // Prefix match on each token — ergonomic as-you-type search.
-  return tokens.map((t) => `${t}*`).join(" ");
-}
 
 export async function listItems(req: Request, env: Env): Promise<Response> {
   const auth = await requireAuth(req, env);
@@ -284,6 +277,7 @@ export async function deleteItem(
   )
     .bind(row.id)
     .run();
+  const revoked = await revokeSharesFor(env, "item", row.id);
   if (row.manifest_slug) {
     await recordActivity(env, "Delete", "Manifest", row.manifest_slug);
   }
@@ -293,6 +287,7 @@ export async function deleteItem(
     "item.delete",
     "item",
     row.id,
+    revoked > 0 ? { revokedShares: revoked } : undefined,
   );
   return new Response(null, { status: 204 });
 }

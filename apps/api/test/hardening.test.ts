@@ -1,5 +1,5 @@
 import { SELF, env } from "cloudflare:test";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { devSignup } from "./helpers.js";
 
 describe("Audit log", () => {
@@ -136,6 +136,89 @@ describe("Rate limit on POST /api/captures", () => {
     expect(lastStatus).toBe(429);
     expect(retryAfter).not.toBeNull();
     expect(Number.parseInt(retryAfter ?? "0", 10)).toBeGreaterThan(0);
+  });
+});
+
+describe("Viewer role", () => {
+  let viewerAuth: Awaited<ReturnType<typeof devSignup>>;
+
+  beforeAll(async () => {
+    viewerAuth = await devSignup("viewer");
+    // Downgrade the owner to viewer on their own workspace — equivalent
+    // to minting an API key for a viewer member. Doing this in beforeAll
+    // (not inside the `it` block) keeps the write outside the per-test
+    // isolated-storage stack frame that Miniflare pops after each case.
+    await env.DB.prepare(
+      `UPDATE workspace_members SET role = 'viewer' WHERE workspace_id = ? AND user_id = ?`,
+    )
+      .bind(viewerAuth.workspaceId, viewerAuth.userId)
+      .run();
+  });
+
+  it("rejects write endpoints with 403 when the member is a viewer", async () => {
+    const post = await SELF.fetch("http://test.local/api/captures", {
+      method: "POST",
+      headers: viewerAuth.authHeaders,
+      body: JSON.stringify({
+        pageUrl: "https://example.com/v",
+        imageUrl: "https://example.com/v.jpg",
+        mode: "reference",
+      }),
+    });
+    expect(post.status).toBe(403);
+
+    const col = await SELF.fetch("http://test.local/api/collections", {
+      method: "POST",
+      headers: viewerAuth.authHeaders,
+      body: JSON.stringify({ title: "forbidden" }),
+    });
+    expect(col.status).toBe(403);
+  });
+});
+
+describe("Shares auto-revoked on soft-delete", () => {
+  it("revokes share tokens targeting a soft-deleted item", async () => {
+    const auth = await devSignup("share-revoke");
+    const cap = await SELF.fetch("http://test.local/api/captures", {
+      method: "POST",
+      headers: auth.authHeaders,
+      body: JSON.stringify({
+        pageUrl: "https://example.com/sr",
+        imageUrl: "https://example.com/sr.jpg",
+        mode: "reference",
+      }),
+    });
+    const { item } = (await cap.json()) as { item: { id: string } };
+
+    const share = await SELF.fetch("http://test.local/api/shares", {
+      method: "POST",
+      headers: auth.authHeaders,
+      body: JSON.stringify({ resourceType: "item", resourceId: item.id, role: "viewer" }),
+    });
+    const { share: created } = (await share.json()) as {
+      share: { id: string; secret: string };
+    };
+
+    // Pre-condition: the share resolves.
+    const resolveOk = await SELF.fetch(`http://test.local/api/shares/${created.secret}`);
+    expect(resolveOk.status).toBe(200);
+
+    // Soft-delete the item.
+    await SELF.fetch(`http://test.local/api/items/${item.id}`, {
+      method: "DELETE",
+      headers: auth.authHeaders,
+    });
+
+    // The share is now revoked and resolve returns 404.
+    const resolveGone = await SELF.fetch(`http://test.local/api/shares/${created.secret}`);
+    expect(resolveGone.status).toBe(404);
+
+    // …and the row is stamped with revoked_at, not just hidden by the
+    // resource filter.
+    const row = await env.DB.prepare(`SELECT revoked_at FROM share_tokens WHERE id = ?`)
+      .bind(created.id)
+      .first<{ revoked_at: string | null }>();
+    expect(row?.revoked_at).not.toBeNull();
   });
 });
 

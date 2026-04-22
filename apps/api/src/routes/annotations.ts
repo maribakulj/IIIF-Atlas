@@ -92,7 +92,7 @@ export async function listItemAnnotations(
   if (!item) throw notFound();
 
   const rows = await env.DB.prepare(
-    `SELECT * FROM annotations WHERE item_id = ? ORDER BY created_at ASC`,
+    `SELECT * FROM annotations WHERE item_id = ? ORDER BY created_at ASC LIMIT 1000`,
   )
     .bind(item.id)
     .all<AnnotationRow>();
@@ -248,7 +248,7 @@ export async function getIiifAnnotationPage(
   if (!item) throw notFound("Annotation page not found");
 
   const rows = await env.DB.prepare(
-    `SELECT * FROM annotations WHERE item_id = ? ORDER BY created_at ASC`,
+    `SELECT * FROM annotations WHERE item_id = ? ORDER BY created_at ASC LIMIT 1000`,
   )
     .bind(item.id)
     .all<AnnotationRow>();

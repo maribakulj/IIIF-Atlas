@@ -1,6 +1,7 @@
 /**
  * Audit log. Append-only record of every mutation we care about:
  *  - `item.create`, `item.update`, `item.delete`, `item.restore`
+ *  - `item.ingest.ready`, `item.ingest.failed` (system actor)
  *  - `collection.create`, `collection.update`, `collection.delete`, `collection.restore`
  *  - `annotation.create`, `annotation.update`, `annotation.delete`
  *  - `share.create`, `share.revoke`
@@ -8,14 +9,24 @@
  *
  * Failures are swallowed — an audit hiccup must never prevent the
  * mutation itself.
+ *
+ * `ctx` shapes:
+ *  - `null`               — neither workspace nor actor known (rare)
+ *  - `{workspaceId, userId}` — user-driven mutation
+ *  - `{workspaceId, userId: null}` — system actor (e.g. queue ingest)
  */
 
 import type { Env } from "./env.js";
 import { ulid } from "./slug.js";
 
+export interface AuditContext {
+  workspaceId: string;
+  userId: string | null;
+}
+
 export async function recordAudit(
   env: Env,
-  ctx: { workspaceId: string; userId: string } | null,
+  ctx: AuditContext | null,
   verb: string,
   subjectType: string,
   subjectId: string,

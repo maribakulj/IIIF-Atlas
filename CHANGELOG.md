@@ -3,6 +3,64 @@
 All notable changes to this project are documented here. This project
 follows [Semantic Versioning](https://semver.org/).
 
+## 1.0.1 — 2026-04-22
+
+Post-review hardening pass. No behaviour changes, no new features —
+only fixes driven by the multi-agent code review of 1.0.0.
+
+### Fixed
+- **Query bounds**: annotations, API-key listing, workspace memberships
+  and tags all carry explicit `LIMIT`s now; tag listing replaces its
+  per-row `COUNT(*)` subquery with a single `LEFT JOIN … GROUP BY`
+  that also excludes soft-deleted items from the count.
+- **Ingest scoping**: `processIngestJob` now `UPDATE`s items with an
+  `AND workspace_id IS ?` guard so a forged or stale queue message
+  can't touch another tenant's row. Status transitions write
+  `item.ingest.ready` / `item.ingest.failed` audit rows with a null
+  actor (system).
+- **Dedup race**: `INSERT OR IGNORE` + re-SELECT on the assets table —
+  two parallel ingests of the same bytes converge on one row.
+- **Auto-revoke shares on soft-delete**: deleting an item or collection
+  now flips every targeting `share_tokens.revoked_at`. Audit rows
+  carry `revokedShares` when any were touched.
+- **Extension storage**: API key moves from `chrome.storage.sync`
+  (roams across Chrome profiles) to `chrome.storage.local`. One-shot
+  migration reads the legacy location once and clears it.
+- **Extension messaging**: `sendToContent` retries once after 250 ms
+  when the content-script wasn't ready, then surfaces a user-visible
+  error with a reload hint. Failure badges distinguish rate-limit
+  (orange) from other errors (red) and carry the message as the
+  action tooltip.
+- **Extension permissions**: `<all_urls>` narrowed to `https://*/*` +
+  `http://*/*` for host permissions and the content-script match.
+- **Detector schemes**: `detectFromDocument` now passes every URL
+  through an `http:`/`https:` whitelist before emitting it — hostile
+  `javascript:`, `data:`, `blob:` URIs are dropped instead of
+  surfacing in `imageCandidates` / `manifestUrl` / `infoJsonUrl` /
+  `primaryImageUrl`.
+- **Web 429 handling**: `ApiError` now carries `retryAfter` (seconds)
+  and an `isRateLimited` helper; default message surfaces
+  `"Too many requests — retry in Xs"` from the `Retry-After` header.
+- **Options form**: `setApiBase` validates the URL is a real
+  `http(s):` origin before writing it; options page surfaces the
+  error instead of silently accepting `ftp://` / relative paths.
+
+### Added
+- **Migration 0009**: composite indexes `(workspace_id, deleted_at)`
+  on items & collections, and `(workspace_id, captured_at DESC)` on
+  items for the Library list. Triggers enforce the `items.status`
+  enum (`processing|ready|failed`) at the DB level — SQLite doesn't
+  allow `ALTER TABLE ADD CHECK`, so triggers are the equivalent.
+- **`apps/api/src/fts.ts`**: single `toFtsQuery` helper shared between
+  `items.ts` and `export.ts` — one place to evolve the FTS sanitiser.
+- **`apps/api/src/shares-revoke.ts`**: `revokeSharesFor(env, type, id)`
+  helper used by both item and collection soft-delete paths.
+- **`audit.ts`**: `AuditContext` type now admits `userId: null` for
+  system actors; documents the `item.ingest.*` verbs.
+- **Tests**: viewer role enforcement (403 on captures/collections) and
+  share-token auto-revoke on soft-delete (verifies `revoked_at`
+  stamp on the row, not just resolve behaviour).
+
 ## 1.0.0 — 2026-04-21
 
 First production release. Eight-sprint journey from MVP to v1; headline
