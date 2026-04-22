@@ -24,6 +24,7 @@ import type {
   AnnotationResponse,
   ListAnnotationsResponse,
 } from "@iiif-atlas/shared";
+import { recordAudit } from "../audit.js";
 import { requireAuth, requireWriter } from "../auth.js";
 import type { Env } from "../env.js";
 import { badRequest, notFound } from "../errors.js";
@@ -84,14 +85,14 @@ export async function listItemAnnotations(
 ): Promise<Response> {
   const auth = await requireAuth(req, env);
   const item = await env.DB.prepare(
-    `SELECT id FROM items WHERE (id = ? OR slug = ?) AND workspace_id = ?`,
+    `SELECT id FROM items WHERE (id = ? OR slug = ?) AND workspace_id = ? AND deleted_at IS NULL`,
   )
     .bind(params.id, params.id, auth.workspaceId)
     .first<{ id: string }>();
   if (!item) throw notFound();
 
   const rows = await env.DB.prepare(
-    `SELECT * FROM annotations WHERE item_id = ? ORDER BY created_at ASC`,
+    `SELECT * FROM annotations WHERE item_id = ? ORDER BY created_at ASC LIMIT 1000`,
   )
     .bind(item.id)
     .all<AnnotationRow>();
@@ -115,7 +116,7 @@ export async function createAnnotation(
   validateBody(body);
 
   const item = await env.DB.prepare(
-    `SELECT id FROM items WHERE (id = ? OR slug = ?) AND workspace_id = ?`,
+    `SELECT id FROM items WHERE (id = ? OR slug = ?) AND workspace_id = ? AND deleted_at IS NULL`,
   )
     .bind(params.id, params.id, auth.workspaceId)
     .first<{ id: string }>();
@@ -142,6 +143,14 @@ export async function createAnnotation(
   const row = await env.DB.prepare(`SELECT * FROM annotations WHERE id = ?`)
     .bind(id)
     .first<AnnotationRow>();
+  await recordAudit(
+    env,
+    { workspaceId: auth.workspaceId, userId: auth.userId },
+    "annotation.create",
+    "annotation",
+    id,
+    { itemId: item.id },
+  );
   const payload: AnnotationResponse = { annotation: mapAnnotation(row!) };
   return Response.json(payload, { status: 201 });
 }
@@ -207,6 +216,13 @@ export async function deleteAnnotation(
     .bind(params.id, auth.workspaceId)
     .run();
   if (res.meta.changes === 0) throw notFound();
+  await recordAudit(
+    env,
+    { workspaceId: auth.workspaceId, userId: auth.userId },
+    "annotation.delete",
+    "annotation",
+    params.id ?? "",
+  );
   return new Response(null, { status: 204 });
 }
 
@@ -225,14 +241,14 @@ export async function getIiifAnnotationPage(
 ): Promise<Response> {
   const slug = params.slug ?? "";
   const item = await env.DB.prepare(
-    `SELECT id, manifest_slug, slug FROM items WHERE manifest_slug = ? OR slug = ?`,
+    `SELECT id, manifest_slug, slug FROM items WHERE (manifest_slug = ? OR slug = ?) AND deleted_at IS NULL`,
   )
     .bind(slug, slug)
     .first<{ id: string; manifest_slug: string | null; slug: string }>();
   if (!item) throw notFound("Annotation page not found");
 
   const rows = await env.DB.prepare(
-    `SELECT * FROM annotations WHERE item_id = ? ORDER BY created_at ASC`,
+    `SELECT * FROM annotations WHERE item_id = ? ORDER BY created_at ASC LIMIT 1000`,
   )
     .bind(item.id)
     .all<AnnotationRow>();

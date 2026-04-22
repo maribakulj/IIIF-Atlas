@@ -1,5 +1,5 @@
 import type { CapturePayload, DetectResult, IngestionMode } from "@iiif-atlas/shared";
-import { getDomainPreset, postCapture } from "./lib/api.js";
+import { CaptureError, getDomainPreset, postCapture } from "./lib/api.js";
 
 const MENU_ID_IMAGE = "iiif-atlas-add-image";
 const MENU_ID_PAGE = "iiif-atlas-add-page";
@@ -34,7 +34,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
       await capturePage(tab);
     }
   } catch (err) {
-    notify("Capture failed", String(err));
+    notifyError(err);
   }
 });
 
@@ -44,7 +44,7 @@ chrome.commands.onCommand.addListener(async (command) => {
   try {
     if (command === "capture-page") await capturePage(tab);
   } catch (err) {
-    notify("Capture failed", String(err));
+    notifyError(err);
   }
 });
 
@@ -63,7 +63,7 @@ async function captureImage(tab: chrome.tabs.Tab, imageUrl: string) {
     clientInfo: { agent: "extension", version: chrome.runtime.getManifest().version },
   };
   const res = await postCapture(payload);
-  notify("Image added to IIIF Atlas", res.item.title ?? res.item.slug);
+  notifyOk("Image added to IIIF Atlas", res.item.title ?? res.item.slug);
 }
 
 async function capturePage(tab: chrome.tabs.Tab) {
@@ -81,14 +81,14 @@ async function capturePage(tab: chrome.tabs.Tab) {
     capturedAt: new Date().toISOString(),
   };
   const res = await postCapture(payload);
-  notify("Page added to IIIF Atlas", res.item.title ?? res.item.slug);
+  notifyOk("Page added to IIIF Atlas", res.item.title ?? res.item.slug);
 }
 
 async function captureRegion(tab: chrome.tabs.Tab, imageUrl: string) {
-  const selection = (await chrome.tabs.sendMessage(tab.id!, {
+  const selection = await sendToContent<{ imageUrl: string; regionXywh: string } | null>(tab.id!, {
     type: "iiif-atlas:start-region-select",
     imageUrl,
-  })) as { imageUrl: string; regionXywh: string } | null;
+  });
   if (!selection) return;
   const detect = await runDetect(tab.id!);
   const preset = await getDomainPreset(tab.url);
@@ -104,7 +104,7 @@ async function captureRegion(tab: chrome.tabs.Tab, imageUrl: string) {
     capturedAt: new Date().toISOString(),
   };
   const res = await postCapture(payload);
-  notify("Region added to IIIF Atlas", res.item.title ?? res.item.slug);
+  notifyOk("Region added to IIIF Atlas", res.item.title ?? res.item.slug);
 }
 
 function resolveMode(detect: DetectResult | null, preset: IngestionMode | null): IngestionMode {
@@ -114,18 +114,50 @@ function resolveMode(detect: DetectResult | null, preset: IngestionMode | null):
 
 async function runDetect(tabId: number): Promise<DetectResult | null> {
   try {
-    const res = (await chrome.tabs.sendMessage(tabId, {
-      type: "iiif-atlas:detect",
-    })) as DetectResult | undefined;
-    return res ?? null;
+    return await sendToContent<DetectResult>(tabId, { type: "iiif-atlas:detect" });
   } catch {
+    // Detection is best-effort; failure here just falls back to `reference` mode.
     return null;
   }
 }
 
-function notify(title: string, message: string) {
+/**
+ * Send a message to the tab's content-script, retrying once after a
+ * short delay if the script wasn't loaded yet (common on pages that
+ * were open before the extension was installed). A second failure
+ * surfaces as a user-visible error so we never fail silently.
+ */
+async function sendToContent<T>(tabId: number, message: unknown): Promise<T> {
+  try {
+    return (await chrome.tabs.sendMessage(tabId, message)) as T;
+  } catch (_first) {
+    await new Promise((r) => setTimeout(r, 250));
+    try {
+      return (await chrome.tabs.sendMessage(tabId, message)) as T;
+    } catch (second) {
+      throw new Error(
+        `The extension couldn't reach this page. Reload the tab and try again. (${String(second)})`,
+      );
+    }
+  }
+}
+
+function notifyOk(title: string, message: string) {
   console.log(`[IIIF Atlas] ${title}: ${message}`);
   chrome.action.setBadgeText({ text: "✓" });
   chrome.action.setBadgeBackgroundColor({ color: "#4f8cff" });
   setTimeout(() => chrome.action.setBadgeText({ text: "" }), 3000);
+}
+
+function notifyError(err: unknown) {
+  const message = err instanceof Error ? err.message : String(err);
+  console.warn("[IIIF Atlas] Capture failed:", message);
+  chrome.action.setBadgeText({ text: "!" });
+  const bg = err instanceof CaptureError && err.status === 429 ? "#ff9a3c" : "#ff4d4d";
+  chrome.action.setBadgeBackgroundColor({ color: bg });
+  chrome.action.setTitle({ title: `IIIF Atlas — ${message}` });
+  setTimeout(() => {
+    chrome.action.setBadgeText({ text: "" });
+    chrome.action.setTitle({ title: "IIIF Atlas" });
+  }, 5000);
 }

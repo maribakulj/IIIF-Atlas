@@ -8,6 +8,7 @@ import type {
   WorkspaceMembership,
   WorkspaceRole,
 } from "@iiif-atlas/shared";
+import { recordAudit } from "../audit.js";
 import { generateApiKey, requireAuth } from "../auth.js";
 import type { Env } from "../env.js";
 import { HttpError, badRequest, notFound } from "../errors.js";
@@ -151,7 +152,8 @@ export async function me(req: Request, env: Env): Promise<Response> {
        FROM workspace_members m
        JOIN workspaces w ON w.id = m.workspace_id
       WHERE m.user_id = ?
-      ORDER BY w.created_at ASC`,
+      ORDER BY w.created_at ASC
+      LIMIT 100`,
   )
     .bind(ctx.userId)
     .all<WorkspaceRow & { role: WorkspaceRole }>();
@@ -177,7 +179,8 @@ export async function listApiKeys(req: Request, env: Env): Promise<Response> {
     `SELECT id, name, prefix, workspace_id, scopes, last_used_at, created_at, revoked_at
        FROM api_keys
       WHERE user_id = ?
-      ORDER BY created_at DESC`,
+      ORDER BY created_at DESC
+      LIMIT 500`,
   )
     .bind(ctx.userId)
     .all<ApiKeySummaryRow>();
@@ -210,6 +213,14 @@ export async function createApiKey(req: Request, env: Env): Promise<Response> {
     body.name,
     body.scopes ?? null,
   );
+  await recordAudit(
+    env,
+    { workspaceId: targetWorkspace, userId: ctx.userId },
+    "apikey.create",
+    "apikey",
+    created.id,
+    { name: created.name },
+  );
   const payload: CreateApiKeyResponse = { key: created };
   return Response.json(payload, { status: 201 });
 }
@@ -232,6 +243,13 @@ export async function revokeApiKey(
     .bind(id, ctx.userId)
     .run();
   if (res.meta.changes === 0) throw notFound("API key not found or already revoked");
+  await recordAudit(
+    env,
+    { workspaceId: ctx.workspaceId, userId: ctx.userId },
+    "apikey.revoke",
+    "apikey",
+    id,
+  );
   return new Response(null, { status: 204 });
 }
 

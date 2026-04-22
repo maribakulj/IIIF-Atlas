@@ -68,6 +68,32 @@ iiif-atlas/
 - `source_manifest_url` is preserved in item metadata when `iiif_reuse` is used.
 - Captures are stored raw in the `captures` table alongside the resulting item for audit.
 
+## Hardening & v1 (Sprint 8)
+
+- **Audit log**. Every mutation we care about appends one row to
+  `audit_log` (workspace_id, actor_user_id, verb, subject_type,
+  subject_id, details_json). Verbs:
+  `item.{create,update,delete,restore}`,
+  `collection.{create,update,delete,restore}`,
+  `annotation.{create,delete}`, `share.{create,revoke}`,
+  `apikey.{create,revoke}`. Failures are swallowed — an audit hiccup
+  must never prevent the mutation itself. The table is append-only;
+  rotation/retention runs out-of-band.
+- **Soft delete + trash**. `DELETE /api/items/:id` and
+  `DELETE /api/collections/:id` set `deleted_at`; the rows are hidden
+  from every read (API, public IIIF, discovery feed, sitemap, oEmbed,
+  export, share resolve). `GET /api/trash` lists tombstones;
+  `POST /api/items/:id/restore` and `POST /api/collections/:id/restore`
+  undelete and — for public resources — re-announce on the activity
+  feed.
+- **Rate limiting**. `POST /api/captures` is protected by a
+  D1-backed token bucket keyed by API key id (30-request burst, 0.5
+  req/s sustained). Exhausted buckets respond `429` with `Retry-After`.
+- **Workspace usage**. `GET /api/workspaces/current/usage` returns
+  `{ items, trashedItems, collections, trashedCollections,
+  annotations, activeShares, assetBytes }` — cheap rollups for the
+  Settings screen.
+
 ## Publication & interop (Sprint 7)
 
 - **IIIF Change Discovery 1**. `GET /iiif/activity.json` serves an

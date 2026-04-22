@@ -7,28 +7,22 @@ import type {
   ListItemsResponse,
 } from "@iiif-atlas/shared";
 import { recordActivity } from "../activity.js";
+import { recordAudit } from "../audit.js";
 import { requireAuth, requireWriter } from "../auth.js";
 import { mapItem } from "../db.js";
 import type { ItemRow } from "../db.js";
 import type { Env } from "../env.js";
 import { badRequest, notFound, unprocessable } from "../errors.js";
+import { toFtsQuery } from "../fts.js";
 import { buildManifestForItem } from "../iiif-builder.js";
 import { enqueueIngest } from "../queue.js";
+import { revokeSharesFor } from "../shares-revoke.js";
 
 const SORTS: Record<ItemSort, string> = {
   captured_at_desc: "i.captured_at DESC",
   captured_at_asc: "i.captured_at ASC",
   title_asc: "COALESCE(i.title, i.slug) COLLATE NOCASE ASC",
 };
-
-/** Sanitize a user query for FTS5 MATCH: strip reserved chars, prefix-match each term. */
-function toFtsQuery(q: string): string {
-  const cleaned = q.replace(/["()*:]/g, " ").trim();
-  const tokens = cleaned.split(/\s+/).filter((t) => t.length > 0);
-  if (tokens.length === 0) return "";
-  // Prefix match on each token — ergonomic as-you-type search.
-  return tokens.map((t) => `${t}*`).join(" ");
-}
 
 export async function listItems(req: Request, env: Env): Promise<Response> {
   const auth = await requireAuth(req, env);
@@ -44,7 +38,7 @@ export async function listItems(req: Request, env: Env): Promise<Response> {
   const facetsWanted = url.searchParams.get("facets") === "1";
 
   const joins: string[] = [];
-  const where: string[] = ["i.workspace_id = ?"];
+  const where: string[] = ["i.workspace_id = ?", "i.deleted_at IS NULL"];
   const binds: unknown[] = [auth.workspaceId];
 
   if (q) {
@@ -178,7 +172,7 @@ export async function getItem(
        FROM items i
        LEFT JOIN item_tags it ON it.item_id = i.id
        LEFT JOIN tags t ON t.id = it.tag_id
-      WHERE (i.id = ? OR i.slug = ?) AND i.workspace_id = ?
+      WHERE (i.id = ? OR i.slug = ?) AND i.workspace_id = ? AND i.deleted_at IS NULL
       GROUP BY i.id`,
   )
     .bind(params.id, params.id, auth.workspaceId)
@@ -200,7 +194,7 @@ export async function patchItem(
   if (!body || typeof body !== "object") throw badRequest("Invalid JSON body");
 
   const row = await env.DB.prepare(
-    `SELECT * FROM items WHERE (id = ? OR slug = ?) AND workspace_id = ?`,
+    `SELECT * FROM items WHERE (id = ? OR slug = ?) AND workspace_id = ? AND deleted_at IS NULL`,
   )
     .bind(params.id, params.id, auth.workspaceId)
     .first<ItemRow>();
@@ -247,8 +241,94 @@ export async function patchItem(
   if (updated.manifest_slug) {
     await recordActivity(env, "Update", "Manifest", updated.manifest_slug);
   }
+  await recordAudit(
+    env,
+    { workspaceId: auth.workspaceId, userId: auth.userId },
+    "item.update",
+    "item",
+    updated.id,
+    { fields: Object.keys(body) },
+  );
   const payload: ItemResponse = { item: mapItem(updated, env.PUBLIC_BASE_URL) };
   return Response.json(payload);
+}
+
+export async function deleteItem(
+  req: Request,
+  env: Env,
+  _ctx: ExecutionContext,
+  params: Record<string, string>,
+): Promise<Response> {
+  const auth = await requireAuth(req, env);
+  requireWriter(auth);
+  const row = await env.DB.prepare(
+    `SELECT id, manifest_slug FROM items
+      WHERE (id = ? OR slug = ?) AND workspace_id = ? AND deleted_at IS NULL`,
+  )
+    .bind(params.id, params.id, auth.workspaceId)
+    .first<{ id: string; manifest_slug: string | null }>();
+  if (!row) throw notFound();
+
+  await env.DB.prepare(
+    `UPDATE items
+        SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
+            updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+      WHERE id = ?`,
+  )
+    .bind(row.id)
+    .run();
+  const revoked = await revokeSharesFor(env, "item", row.id);
+  if (row.manifest_slug) {
+    await recordActivity(env, "Delete", "Manifest", row.manifest_slug);
+  }
+  await recordAudit(
+    env,
+    { workspaceId: auth.workspaceId, userId: auth.userId },
+    "item.delete",
+    "item",
+    row.id,
+    revoked > 0 ? { revokedShares: revoked } : undefined,
+  );
+  return new Response(null, { status: 204 });
+}
+
+export async function restoreItem(
+  req: Request,
+  env: Env,
+  _ctx: ExecutionContext,
+  params: Record<string, string>,
+): Promise<Response> {
+  const auth = await requireAuth(req, env);
+  requireWriter(auth);
+  const row = await env.DB.prepare(
+    `SELECT id, manifest_slug FROM items
+      WHERE (id = ? OR slug = ?) AND workspace_id = ? AND deleted_at IS NOT NULL`,
+  )
+    .bind(params.id, params.id, auth.workspaceId)
+    .first<{ id: string; manifest_slug: string | null }>();
+  if (!row) throw notFound("Item not in trash");
+
+  await env.DB.prepare(
+    `UPDATE items SET deleted_at = NULL,
+                      updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+       WHERE id = ?`,
+  )
+    .bind(row.id)
+    .run();
+  if (row.manifest_slug) {
+    await recordActivity(env, "Create", "Manifest", row.manifest_slug);
+  }
+  await recordAudit(
+    env,
+    { workspaceId: auth.workspaceId, userId: auth.userId },
+    "item.restore",
+    "item",
+    row.id,
+  );
+  const refreshed = await env.DB.prepare(`SELECT * FROM items WHERE id = ?`)
+    .bind(row.id)
+    .first<ItemRow>();
+  return Response.json({ item: mapItem(refreshed!, env.PUBLIC_BASE_URL) });
 }
 
 export async function generateManifest(
@@ -260,7 +340,7 @@ export async function generateManifest(
   const auth = await requireAuth(req, env);
   requireWriter(auth);
   const row = await env.DB.prepare(
-    `SELECT * FROM items WHERE (id = ? OR slug = ?) AND workspace_id = ?`,
+    `SELECT * FROM items WHERE (id = ? OR slug = ?) AND workspace_id = ? AND deleted_at IS NULL`,
   )
     .bind(params.id, params.id, auth.workspaceId)
     .first<ItemRow>();
@@ -303,7 +383,7 @@ export async function retryItem(
   const auth = await requireAuth(req, env);
   requireWriter(auth);
   const row = await env.DB.prepare(
-    `SELECT * FROM items WHERE (id = ? OR slug = ?) AND workspace_id = ?`,
+    `SELECT * FROM items WHERE (id = ? OR slug = ?) AND workspace_id = ? AND deleted_at IS NULL`,
   )
     .bind(params.id, params.id, auth.workspaceId)
     .first<ItemRow>();

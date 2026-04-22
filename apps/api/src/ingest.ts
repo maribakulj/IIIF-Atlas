@@ -8,19 +8,20 @@
  *    available (tests, single-instance dev). Same code path either way.
  *
  * Algorithm:
- *  1. Load the item; bail with status='failed' if missing or bad source.
+ *  1. Load the item (captures workspace_id); bail if missing.
  *  2. safeFetch the source image (SSRF + size + MIME guards still apply).
  *  3. Compute SHA-256 of the bytes.
- *  4. Look up `assets` by sha256:
- *      - hit  → reuse the existing R2 object, skip the put.
- *      - miss → probe dimensions, R2.put, INSERT INTO assets.
- *  5. Update the item: r2_key, mime, byte_size, width, height,
- *     asset_sha256, status='ready', error_message=NULL.
+ *  4. INSERT OR IGNORE into `assets` (PRIMARY KEY sha256) then re-SELECT
+ *     the canonical row. Two concurrent ingests of the same bytes
+ *     converge on one asset — the second R2.put is wasteful but
+ *     idempotent.
+ *  5. Update the item (scoped by workspace_id as defense-in-depth).
  *
- * Failures set status='failed' and error_message; the item stays in the
- * library so the user can retry.
+ * Every status transition writes an audit row so the pipeline is
+ * traceable from /api/audit in ops.
  */
 
+import { recordAudit } from "./audit.js";
 import { getLimits } from "./env.js";
 import type { Env } from "./env.js";
 import { safeFetch } from "./fetch-safe.js";
@@ -52,12 +53,11 @@ export async function processIngestJob(env: Env, itemId: string): Promise<void> 
   if (!item) return; // Item was deleted before we got to it.
 
   if (item.mode !== "cached") {
-    // Defensive: only cached items go through ingest.
-    await markReady(env, itemId);
+    await markReady(env, item);
     return;
   }
   if (!item.source_image_url) {
-    await markFailed(env, itemId, "source_image_url is missing");
+    await markFailed(env, item, "source_image_url is missing");
     return;
   }
 
@@ -70,41 +70,11 @@ export async function processIngestJob(env: Env, itemId: string): Promise<void> 
     });
 
     const sha = await sha256Hex(fetched.body);
-    const existing = await env.DB.prepare(`SELECT * FROM assets WHERE sha256 = ?`)
-      .bind(sha)
-      .first<AssetRow>();
+    const asset = await upsertAsset(env, sha, fetched, itemId);
 
-    let asset: AssetRow;
-    if (existing) {
-      // Dedup hit — no R2 write, no probe; the existing asset is canonical.
-      asset = existing;
-    } else {
-      const dims = probeImage(fetched.body);
-      const r2Key = buildR2Key(itemId, fetched.mime);
-      await putImage(env, r2Key, fetched.body, fetched.mime);
-      await env.DB.prepare(
-        `INSERT INTO assets (sha256, mime, byte_size, width, height, r2_key)
-         VALUES (?,?,?,?,?,?)`,
-      )
-        .bind(
-          sha,
-          fetched.mime,
-          fetched.body.byteLength,
-          dims?.width ?? null,
-          dims?.height ?? null,
-          r2Key,
-        )
-        .run();
-      asset = {
-        sha256: sha,
-        mime: fetched.mime,
-        byte_size: fetched.body.byteLength,
-        width: dims?.width ?? null,
-        height: dims?.height ?? null,
-        r2_key: r2Key,
-      };
-    }
-
+    // Scoped by workspace_id as defense-in-depth: even if a forged
+    // queue message passed an itemId, we won't touch a row belonging
+    // to a different tenant.
     await env.DB.prepare(
       `UPDATE items
           SET r2_key = ?, mime_type = ?, byte_size = ?,
@@ -113,7 +83,7 @@ export async function processIngestJob(env: Env, itemId: string): Promise<void> 
               error_message = NULL,
               manifest_json = NULL,
               updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-        WHERE id = ?`,
+        WHERE id = ? AND workspace_id IS ?`,
     )
       .bind(
         asset.r2_key,
@@ -123,32 +93,86 @@ export async function processIngestJob(env: Env, itemId: string): Promise<void> 
         asset.height,
         asset.sha256,
         itemId,
+        item.workspace_id,
       )
       .run();
+    await recordAudit(
+      env,
+      item.workspace_id ? { workspaceId: item.workspace_id, userId: null } : null,
+      "item.ingest.ready",
+      "item",
+      itemId,
+      { sha256: sha, bytes: asset.byte_size },
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    await markFailed(env, itemId, message);
+    await markFailed(env, item, message);
   }
 }
 
-async function markReady(env: Env, itemId: string): Promise<void> {
+async function upsertAsset(
+  env: Env,
+  sha: string,
+  fetched: { body: Uint8Array; mime: string },
+  itemId: string,
+): Promise<AssetRow> {
+  const existing = await env.DB.prepare(`SELECT * FROM assets WHERE sha256 = ?`)
+    .bind(sha)
+    .first<AssetRow>();
+  if (existing) return existing;
+
+  const dims = probeImage(fetched.body);
+  const r2Key = buildR2Key(itemId, fetched.mime);
+  await putImage(env, r2Key, fetched.body, fetched.mime);
+  // OR IGNORE lets a parallel ingest of the same bytes land first; we
+  // then re-SELECT the canonical row below so both workers converge.
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO assets (sha256, mime, byte_size, width, height, r2_key)
+     VALUES (?,?,?,?,?,?)`,
+  )
+    .bind(
+      sha,
+      fetched.mime,
+      fetched.body.byteLength,
+      dims?.width ?? null,
+      dims?.height ?? null,
+      r2Key,
+    )
+    .run();
+  const row = await env.DB.prepare(`SELECT * FROM assets WHERE sha256 = ?`)
+    .bind(sha)
+    .first<AssetRow>();
+  if (!row) throw new Error("Asset row vanished after insert");
+  return row;
+}
+
+async function markReady(env: Env, item: ItemForIngest): Promise<void> {
   await env.DB.prepare(
     `UPDATE items SET status = 'ready', error_message = NULL,
                        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-       WHERE id = ?`,
+       WHERE id = ? AND workspace_id IS ?`,
   )
-    .bind(itemId)
+    .bind(item.id, item.workspace_id)
     .run();
 }
 
-async function markFailed(env: Env, itemId: string, message: string): Promise<void> {
+async function markFailed(env: Env, item: ItemForIngest, message: string): Promise<void> {
+  const trimmed = message.slice(0, 1024);
   await env.DB.prepare(
     `UPDATE items SET status = 'failed', error_message = ?,
                        updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
-       WHERE id = ?`,
+       WHERE id = ? AND workspace_id IS ?`,
   )
-    .bind(message.slice(0, 1024), itemId)
+    .bind(trimmed, item.id, item.workspace_id)
     .run();
+  await recordAudit(
+    env,
+    item.workspace_id ? { workspaceId: item.workspace_id, userId: "system" } : null,
+    "item.ingest.failed",
+    "item",
+    item.id,
+    { error: trimmed },
+  );
 }
 
 async function sha256Hex(bytes: Uint8Array): Promise<string> {

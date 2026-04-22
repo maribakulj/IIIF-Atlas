@@ -38,11 +38,16 @@ function Options() {
       setError(`Presets JSON invalid: ${(err as Error).message}`);
       return;
     }
-    await Promise.all([
-      setApiBase(apiBase.trim()),
-      setApiKey(apiKey.trim()),
-      setDomainPresets(presets),
-    ]);
+    try {
+      await Promise.all([
+        setApiBase(apiBase.trim()),
+        setApiKey(apiKey.trim()),
+        setDomainPresets(presets),
+      ]);
+    } catch (err) {
+      setError((err as Error).message);
+      return;
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }

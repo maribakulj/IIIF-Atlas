@@ -23,6 +23,7 @@ import type {
   ShareTokenSummary,
   ShareTokenWithSecret,
 } from "@iiif-atlas/shared";
+import { recordAudit } from "../audit.js";
 import { hashApiKey, requireAuth, requireWriter } from "../auth.js";
 import { mapCollection, mapItem } from "../db.js";
 import type { CollectionRow, ItemRow } from "../db.js";
@@ -79,7 +80,9 @@ async function assertResourceOwnership(
   resourceId: string,
 ): Promise<void> {
   const table = resourceType === "collection" ? "collections" : "items";
-  const row = await env.DB.prepare(`SELECT id FROM ${table} WHERE id = ? AND workspace_id = ?`)
+  const row = await env.DB.prepare(
+    `SELECT id FROM ${table} WHERE id = ? AND workspace_id = ? AND deleted_at IS NULL`,
+  )
     .bind(resourceId, workspaceId)
     .first<{ id: string }>();
   if (!row) throw notFound(`${resourceType} not found in this workspace`);
@@ -125,6 +128,14 @@ export async function createShare(req: Request, env: Env): Promise<Response> {
   const row = await env.DB.prepare(`SELECT * FROM share_tokens WHERE id = ?`)
     .bind(id)
     .first<ShareRow>();
+  await recordAudit(
+    env,
+    { workspaceId: auth.workspaceId, userId: auth.userId },
+    "share.create",
+    "share",
+    id,
+    { resourceType: body.resourceType, resourceId: body.resourceId, role },
+  );
   const payload: ShareTokenWithSecret = { ...mapShareSummary(row!), secret: raw };
   const res: CreateShareResponse = { share: payload };
   return Response.json(res, { status: 201 });
@@ -171,6 +182,13 @@ export async function revokeShare(
     .bind(params.id, auth.workspaceId)
     .run();
   if (res.meta.changes === 0) throw notFound("Share not found or already revoked");
+  await recordAudit(
+    env,
+    { workspaceId: auth.workspaceId, userId: auth.userId },
+    "share.revoke",
+    "share",
+    params.id ?? "",
+  );
   return new Response(null, { status: 204 });
 }
 
@@ -211,7 +229,9 @@ export async function resolveShare(
   };
 
   if (row.resource_type === "collection") {
-    const col = await env.DB.prepare(`SELECT * FROM collections WHERE id = ?`)
+    const col = await env.DB.prepare(
+      `SELECT * FROM collections WHERE id = ? AND deleted_at IS NULL`,
+    )
       .bind(row.resource_id)
       .first<CollectionRow>();
     if (!col) throw notFound();
@@ -221,7 +241,7 @@ export async function resolveShare(
          INNER JOIN collection_items ci ON ci.item_id = i.id
          LEFT JOIN item_tags it ON it.item_id = i.id
          LEFT JOIN tags t ON t.id = it.tag_id
-        WHERE ci.collection_id = ?
+        WHERE ci.collection_id = ? AND i.deleted_at IS NULL
         GROUP BY i.id
         ORDER BY ci.position ASC`,
     )
@@ -235,7 +255,7 @@ export async function resolveShare(
          FROM items i
          LEFT JOIN item_tags it ON it.item_id = i.id
          LEFT JOIN tags t ON t.id = it.tag_id
-        WHERE i.id = ?
+        WHERE i.id = ? AND i.deleted_at IS NULL
         GROUP BY i.id`,
     )
       .bind(row.resource_id)

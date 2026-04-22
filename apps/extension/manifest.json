@@ -4,14 +4,14 @@
   "version": "0.2.0",
   "description": "Clip images from the web into your IIIF library. Detects IIIF manifests and info.json automatically.",
   "permissions": ["contextMenus", "activeTab", "scripting", "storage"],
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": ["https://*/*", "http://*/*"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
+      "matches": ["https://*/*", "http://*/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
     }

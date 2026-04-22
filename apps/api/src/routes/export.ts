@@ -19,6 +19,7 @@ import { mapItem } from "../db.js";
 import type { ItemRow } from "../db.js";
 import type { Env } from "../env.js";
 import { badRequest } from "../errors.js";
+import { toFtsQuery } from "../fts.js";
 
 const EXPORT_MAX = 5000;
 
@@ -36,16 +37,10 @@ export async function exportItems(req: Request, env: Env): Promise<Response> {
   }
 
   const joins: string[] = [];
-  const where: string[] = ["i.workspace_id = ?"];
+  const where: string[] = ["i.workspace_id = ?", "i.deleted_at IS NULL"];
   const binds: unknown[] = [auth.workspaceId];
   if (q) {
-    const ftsQuery = q
-      .replace(/["()*:]/g, " ")
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((t) => `${t}*`)
-      .join(" ");
+    const ftsQuery = toFtsQuery(q);
     if (ftsQuery) {
       joins.push("INNER JOIN items_fts f ON f.item_id = i.id");
       where.push("items_fts MATCH ?");

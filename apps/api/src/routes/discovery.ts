@@ -111,13 +111,13 @@ export async function getSitemap(_req: Request, env: Env): Promise<Response> {
   const base = publicBase(env);
   const manifestRows = await env.DB.prepare(
     `SELECT manifest_slug AS slug, updated_at FROM items
-      WHERE manifest_slug IS NOT NULL
+      WHERE manifest_slug IS NOT NULL AND deleted_at IS NULL
       ORDER BY updated_at DESC
       LIMIT 10000`,
   ).all<{ slug: string; updated_at: string }>();
   const collectionRows = await env.DB.prepare(
     `SELECT slug, updated_at FROM collections
-      WHERE is_public = 1
+      WHERE is_public = 1 AND deleted_at IS NULL
       ORDER BY updated_at DESC
       LIMIT 10000`,
   ).all<{ slug: string; updated_at: string }>();
@@ -168,7 +168,7 @@ export async function getOembed(req: Request, env: Env): Promise<Response> {
   if (!target.startsWith(prefix)) throw notFound("URL is not an IIIF manifest on this host");
   const slug = target.slice(prefix.length).replace(/\/$/, "");
   const row = await env.DB.prepare(
-    `SELECT title, slug FROM items WHERE manifest_slug = ? OR slug = ? LIMIT 1`,
+    `SELECT title, slug FROM items WHERE (manifest_slug = ? OR slug = ?) AND deleted_at IS NULL LIMIT 1`,
   )
     .bind(slug, slug)
     .first<{ title: string | null; slug: string }>();
