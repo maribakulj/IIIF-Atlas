@@ -46,13 +46,7 @@ function mockPng(url: string, body: Uint8Array) {
     });
 }
 
-// TODO(sprint-3): re-enable when the upstream miniflare R2 isolated-storage
-// teardown bug is resolved. The pipeline executes correctly end-to-end
-// (status transitions to 'ready', dedup, etc.); only the test runner
-// trips when popping R2 stack frames after the suite. The dedup + probe
-// logic itself is exercised by image-probe.test.ts and the safeFetch
-// unit tests.
-describe.skip("cached mode end-to-end (sync fallback)", () => {
+describe("cached mode end-to-end (sync fallback)", () => {
   it("creates a 'ready' item with probed dimensions and stores the asset", async () => {
     const body = pngBytes(2400, 1600, 32);
     const url = "https://cdn.example.com/dim/one.png";

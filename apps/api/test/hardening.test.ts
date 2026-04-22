@@ -1,5 +1,5 @@
 import { SELF, env } from "cloudflare:test";
-import { beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { devSignup } from "./helpers.js";
 
 describe("Audit log", () => {
@@ -140,22 +140,18 @@ describe("Rate limit on POST /api/captures", () => {
 });
 
 describe("Viewer role", () => {
-  let viewerAuth: Awaited<ReturnType<typeof devSignup>>;
-
-  beforeAll(async () => {
-    viewerAuth = await devSignup("viewer");
-    // Downgrade the owner to viewer on their own workspace — equivalent
-    // to minting an API key for a viewer member. Doing this in beforeAll
-    // (not inside the `it` block) keeps the write outside the per-test
-    // isolated-storage stack frame that Miniflare pops after each case.
+  async function downgradeToViewer(auth: Awaited<ReturnType<typeof devSignup>>): Promise<void> {
     await env.DB.prepare(
       `UPDATE workspace_members SET role = 'viewer' WHERE workspace_id = ? AND user_id = ?`,
     )
-      .bind(viewerAuth.workspaceId, viewerAuth.userId)
+      .bind(auth.workspaceId, auth.userId)
       .run();
-  });
+  }
 
   it("rejects write endpoints with 403 when the member is a viewer", async () => {
+    const viewerAuth = await devSignup("viewer");
+    await downgradeToViewer(viewerAuth);
+
     const post = await SELF.fetch("http://test.local/api/captures", {
       method: "POST",
       headers: viewerAuth.authHeaders,
@@ -173,6 +169,69 @@ describe("Viewer role", () => {
       body: JSON.stringify({ title: "forbidden" }),
     });
     expect(col.status).toBe(403);
+  });
+
+  it("still allows read endpoints for viewers", async () => {
+    const viewerAuth = await devSignup("viewer-read");
+    await downgradeToViewer(viewerAuth);
+
+    const listItems = await SELF.fetch("http://test.local/api/items", {
+      headers: viewerAuth.authHeaders,
+    });
+    expect(listItems.status).toBe(200);
+
+    const me = await SELF.fetch("http://test.local/api/auth/me", {
+      headers: viewerAuth.authHeaders,
+    });
+    expect(me.status).toBe(200);
+  });
+
+  it("rejects viewer writes across every mutating endpoint family", async () => {
+    // Owner bootstraps a collection + item the viewer is expected to poke at.
+    const owner = await devSignup("viewer-reject-owner");
+    const cap = await SELF.fetch("http://test.local/api/captures", {
+      method: "POST",
+      headers: owner.authHeaders,
+      body: JSON.stringify({
+        pageUrl: "https://example.com/vr",
+        imageUrl: "https://example.com/vr.jpg",
+        mode: "reference",
+      }),
+    });
+    const { item } = (await cap.json()) as { item: { id: string } };
+    const col = await SELF.fetch("http://test.local/api/collections", {
+      method: "POST",
+      headers: owner.authHeaders,
+      body: JSON.stringify({ title: "owner-col" }),
+    });
+    const { collection } = (await col.json()) as { collection: { id: string } };
+
+    const viewer = await devSignup("viewer-reject");
+    await downgradeToViewer(viewer);
+
+    const endpoints: Array<[string, string, Record<string, unknown> | null]> = [
+      ["PATCH", `/api/items/${item.id}`, { title: "nope" }],
+      ["DELETE", `/api/items/${item.id}`, null],
+      ["POST", `/api/items/${item.id}/restore`, {}],
+      ["POST", `/api/items/${item.id}/generate-manifest`, {}],
+      ["POST", `/api/items/${item.id}/retry`, {}],
+      ["POST", `/api/items/${item.id}/tags`, { tag: "nope" }],
+      ["DELETE", `/api/items/${item.id}/tags/nope`, null],
+      ["POST", `/api/items/${item.id}/annotations`, { body: { value: "x" } }],
+      ["PATCH", `/api/collections/${collection.id}`, { title: "x" }],
+      ["DELETE", `/api/collections/${collection.id}`, null],
+      ["POST", `/api/collections/${collection.id}/restore`, {}],
+      ["POST", "/api/shares", { resourceType: "item", resourceId: item.id, role: "viewer" }],
+    ];
+
+    for (const [method, path, body] of endpoints) {
+      const res = await SELF.fetch(`http://test.local${path}`, {
+        method,
+        headers: viewer.authHeaders,
+        body: body === null ? undefined : JSON.stringify(body),
+      });
+      expect(res.status, `${method} ${path} should be 403 for a viewer`).toBe(403);
+    }
   });
 });
 
