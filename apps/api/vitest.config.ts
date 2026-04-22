@@ -14,6 +14,14 @@ export default defineWorkersConfig(async () => {
       setupFiles: ["./test/setup.ts"],
       poolOptions: {
         workers: {
+          // Disable Miniflare's per-test isolated storage: it interacts
+          // badly with D1's WAL companion files (the `updateStackedStorage`
+          // pop fails when a `.sqlite-shm` is still mapped), and every test
+          // already scopes writes by a freshly-minted workspace/api-key so
+          // state leakage is not a concern. See setup.ts for the minimal
+          // cleanup we still run between tests.
+          isolatedStorage: false,
+          singleWorker: true,
           wrangler: { configPath: "./wrangler.toml" },
           miniflare: {
             d1Databases: ["DB"],

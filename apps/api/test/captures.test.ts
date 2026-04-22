@@ -103,9 +103,7 @@ describe("POST /api/captures — reference mode", () => {
   });
 });
 
-// TODO(sprint-2): re-enable these once miniflare's isolated-storage R2
-// teardown bug is resolved; the cached image pipeline will move to Queues.
-describe.skip("POST /api/captures — cached mode", () => {
+describe("POST /api/captures — cached mode", () => {
   it("downloads the image to R2 and records byte size + mime", async () => {
     mockImage("https://cdn.example.com/art.png", "image/png", 2048);
 
@@ -132,7 +130,11 @@ describe.skip("POST /api/captures — cached mode", () => {
     expect(obj?.size).toBe(2048);
   });
 
-  it("rejects disallowed MIME types", async () => {
+  it("marks the item 'failed' when the source MIME is disallowed", async () => {
+    // With ingestion running via Queues (or inline in tests), MIME
+    // rejection surfaces as status=failed with a descriptive
+    // error_message, not a synchronous 422. The POST itself still
+    // succeeds so callers can surface the retry UI.
     mockImage("https://cdn.example.com/evil.exe", "application/octet-stream", 32);
     const res = await SELF.fetch("http://test.local/api/captures", {
       method: "POST",
@@ -143,7 +145,12 @@ describe.skip("POST /api/captures — cached mode", () => {
         mode: "cached",
       }),
     });
-    expect(res.status).toBe(422);
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as {
+      item: { id: string; status: string; errorMessage: string | null };
+    };
+    expect(body.item.status).toBe("failed");
+    expect(body.item.errorMessage ?? "").toMatch(/mime|not allowed|image/i);
   });
 });
 
@@ -175,11 +182,7 @@ describe("POST /api/captures — iiif_reuse mode", () => {
     expect(body.item.sourceManifestUrl).toBe("https://iiif.example.org/m/abc.json");
   });
 
-  // TODO(sprint-2): integration variant tracks an upstream miniflare bug
-  // where the WAL SHM file left over after the previous test trips the
-  // isolated-storage assertion. Behavior covered by classifyIIIFJson
-  // unit tests in packages/shared.
-  it.skip("rejects non-IIIF JSON", async () => {
+  it("rejects non-IIIF JSON", async () => {
     mockJson("https://example.org/random.json", { hello: "world" });
     const res = await SELF.fetch("http://test.local/api/captures", {
       method: "POST",

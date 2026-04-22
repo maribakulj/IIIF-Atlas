@@ -55,10 +55,9 @@ export async function getCollectionBySlug(
   )
     .bind(params.slug)
     .first<CollectionRow>();
-  if (!row) throw notFound("Collection not found");
-  if (!row.is_public) {
-    return new Response("Forbidden", { status: 403 });
-  }
+  // Return 404 for both missing AND private collections so we don't leak
+  // the existence of a slug to anonymous callers.
+  if (!row || !row.is_public) throw notFound("Collection not found");
   const items = await env.DB.prepare(
     `SELECT i.* FROM items i
      INNER JOIN collection_items ci ON ci.item_id = i.id

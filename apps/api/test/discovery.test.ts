@@ -38,6 +38,33 @@ beforeAll(async () => {
   });
 });
 
+interface ActivityEvent {
+  type: string;
+  endTime: string;
+  object: { id: string; type: string };
+}
+
+/**
+ * Scan pages of the Change Discovery feed until we find an event whose
+ * object.id ends with the given suffix, or we run out of pages. Needed
+ * because the feed is chronological ascending and test bootstrap data
+ * from other files can push our fixture past page 0.
+ */
+async function findEvent(suffix: string): Promise<ActivityEvent | null> {
+  const top = await SELF.fetch("http://test.local/iiif/activity.json");
+  const topBody = (await top.json()) as {
+    last: { id: string };
+  };
+  const lastPage = Number.parseInt(topBody.last.id.split("/").pop() ?? "0", 10);
+  for (let n = lastPage; n >= 0; n--) {
+    const res = await SELF.fetch(`http://test.local/iiif/activity/page/${n}`);
+    const body = (await res.json()) as { orderedItems: ActivityEvent[] };
+    const hit = body.orderedItems.find((e) => e.object.id.endsWith(suffix));
+    if (hit) return hit;
+  }
+  return null;
+}
+
 describe("IIIF Change Discovery", () => {
   it("serves an OrderedCollection top-level page without auth", async () => {
     const res = await SELF.fetch("http://test.local/iiif/activity.json");
@@ -54,29 +81,16 @@ describe("IIIF Change Discovery", () => {
   });
 
   it("serves paged orderedItems with Create events for our fixtures", async () => {
-    const res = await SELF.fetch("http://test.local/iiif/activity/page/0");
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as {
-      type: string;
-      orderedItems: Array<{
-        type: string;
-        endTime: string;
-        object: { id: string; type: string };
-      }>;
-    };
-    expect(body.type).toBe("OrderedCollectionPage");
-    const manifestEvent = body.orderedItems.find((e) =>
-      e.object.id.endsWith(`/iiif/manifests/${manifestSlug}`),
-    );
+    const manifestEvent = await findEvent(`/iiif/manifests/${manifestSlug}`);
     expect(manifestEvent?.type).toBe("Create");
     expect(manifestEvent?.object.type).toBe("Manifest");
 
-    const publicEvent = body.orderedItems.find((e) =>
-      e.object.id.endsWith(`/iiif/collections/${publicCollectionSlug}`),
-    );
+    const publicEvent = await findEvent(`/iiif/collections/${publicCollectionSlug}`);
     expect(publicEvent?.type).toBe("Create");
+
     // Private collections never land in the feed.
-    expect(body.orderedItems.some((e) => /private-collection/.test(e.object.id))).toBe(false);
+    const privateHit = await findEvent("/iiif/collections/private-collection");
+    expect(privateHit).toBeNull();
   });
 });
 

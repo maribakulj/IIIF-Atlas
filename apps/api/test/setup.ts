@@ -1,5 +1,5 @@
 import { applyD1Migrations, env } from "cloudflare:test";
-import { afterEach, beforeAll } from "vitest";
+import { beforeAll } from "vitest";
 
 declare module "cloudflare:test" {
   interface ProvidedEnv {
@@ -15,19 +15,9 @@ declare module "cloudflare:test" {
   }
 }
 
-// Apply migrations once per test worker.
+// Apply migrations once per test worker. With isolatedStorage disabled the
+// schema persists across tests; every test bootstraps its own workspace +
+// API key via devSignup() so data stays logically partitioned.
 beforeAll(async () => {
   await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
-});
-
-// Workaround for an upstream miniflare/workerd bug where SQLite WAL/SHM
-// companion files left over after a test cause `updateStackedStorage` to
-// fail when popping isolated storage. TRUNCATE removes the WAL and lets the
-// snapshot mechanism see only the .sqlite file.
-afterEach(async () => {
-  try {
-    await env.DB.prepare("PRAGMA wal_checkpoint(TRUNCATE)").run();
-  } catch {
-    /* not critical for test correctness */
-  }
 });
